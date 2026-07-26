@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use bevy::app::Plugin;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub struct PixquareUltraPlugin;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+impl Plugin for PixquareUltraPlugin {
+    fn build(&self, app: &mut bevy::app::App) {}
 }

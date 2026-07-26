@@ -6,3 +6,8 @@ authors = ["kudohamu"]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false }
+
+[dev-dependencies]
+bevy = { version = "0.18", features = [
+  "bevy_window"
+] }
