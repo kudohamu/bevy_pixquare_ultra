@@ -2,5 +2,7 @@
 name = "bevy_pixquare_ultra"
 version = "0.1.0"
 edition = "2024"
+authors = ["kudohamu"]
 
 [dependencies]
+bevy = { version = "0.19", default-features = false }
