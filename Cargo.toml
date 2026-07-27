@@ -6,6 +6,7 @@ authors = ["kudohamu"]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false }
+pixquare-io = { path = "../pixquare-io" }
 
 [dev-dependencies]
 bevy = { version = "0.18", features = [
