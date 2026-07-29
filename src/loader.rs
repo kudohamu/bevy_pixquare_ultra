@@ -9,7 +9,7 @@ use bevy::{
 use pixquare::{error::ParseError, model::Artwork};
 
 #[derive(Debug, Asset, TypePath)]
-pub struct PxArtwork(Artwork);
+pub struct PxArtwork(pub Artwork);
 
 #[derive(Debug, TypePath)]
 struct PixquareLoader;

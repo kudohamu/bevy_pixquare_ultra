@@ -19,7 +19,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, server: Res<AssetServer>) {
-  commands.spawn(Camera2d);
+  commands.spawn((Camera2d, Transform::default().with_scale(Vec3::splat(0.1))));
 
   commands.spawn((
     PixquareFile {
