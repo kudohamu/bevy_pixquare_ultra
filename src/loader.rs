@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use bevy::{
   app::{App, Plugin},
-  asset::{Asset, AssetApp, AssetLoader, Handle},
-  ecs::component::Component,
+  asset::{Asset, AssetApp, AssetLoader},
+  log::debug,
   reflect::TypePath,
 };
 use pixquare::{error::ParseError, model::Artwork};
@@ -11,16 +11,11 @@ use pixquare::{error::ParseError, model::Artwork};
 #[derive(Debug, Asset, TypePath)]
 pub struct PxArtwork(Artwork);
 
-#[derive(Component, Default)]
-pub struct Pixquare {
-  artwork: Handle<PxArtwork>,
-}
-
 #[derive(Debug, TypePath)]
-pub struct PixquareLoader;
+struct PixquareLoader;
 
 #[derive(Debug)]
-pub enum PixquareLoaderError {
+enum PixquareLoaderError {
   ReadError(std::io::Error),
   ParseError(String),
 }
@@ -67,6 +62,7 @@ impl AssetLoader for PixquareLoader {
     reader.read_to_end(&mut bytes).await?;
     let artwork = Artwork::read(&bytes)?;
 
+    debug!("loaded");
     Ok(PxArtwork(artwork))
   }
 
