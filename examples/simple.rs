@@ -1,5 +1,6 @@
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{PixquareUltraPlugin, renderer::PixquareFile};
+use pixquare::utility_type::LayerVisibility;
 
 fn main() {
   App::new()
@@ -24,6 +25,7 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
   commands.spawn((
     PixquareFile {
       artwork: server.load("orange.px"),
+      layer_visibility: LayerVisibility::Visible,
     },
     Sprite::default(),
     Transform::from_xyz(0., 0., 0.),

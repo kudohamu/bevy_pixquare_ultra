@@ -3238,6 +3238,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "msgw3c"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c2459e0c0f6364dc2aff320b614a8493bcf6c0b78dd0c25f557ec7fe5fd9ad3"
+
+[[package]]
 name = "naga"
 version = "27.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3846,6 +3852,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "half",
+ "msgw3c",
  "nom 8.0.0",
 ]
 

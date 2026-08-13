@@ -3,7 +3,6 @@ use std::fmt::Display;
 use bevy::{
   app::{App, Plugin},
   asset::{Asset, AssetApp, AssetLoader},
-  log::debug,
   reflect::TypePath,
 };
 use pixquare::{error::ParseError, model::Artwork};
@@ -62,7 +61,6 @@ impl AssetLoader for PixquareLoader {
     reader.read_to_end(&mut bytes).await?;
     let artwork = Artwork::read(&bytes)?;
 
-    debug!("loaded");
     Ok(PxArtwork(artwork))
   }
 

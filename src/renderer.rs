@@ -8,16 +8,27 @@ use bevy::{
     world::Ref,
   },
   image::{Image, ImageSampler},
-  log::debug,
+  log::{debug, error},
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
 };
+use pixquare::utility_type::LayerVisibility;
 
 use crate::loader::PxArtwork;
 
-#[derive(Component, Default)]
+#[derive(Component)]
 pub struct PixquareFile {
   pub artwork: Handle<PxArtwork>,
+  pub layer_visibility: LayerVisibility,
+}
+
+impl Default for PixquareFile {
+  fn default() -> Self {
+    Self {
+      artwork: Handle::default(),
+      layer_visibility: LayerVisibility::Visible,
+    }
+  }
 }
 
 trait RenderPx {
@@ -31,7 +42,6 @@ impl RenderPx for Sprite {
 
   fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
     self.image = texture;
-    debug!("render!");
   }
 }
 
@@ -53,33 +63,28 @@ fn render<T: RenderPx + Component<Mutability = Mutable>>(
       continue;
     };
 
-    let mut rgba_bytes = Vec::<u8>::with_capacity(
-      (artwork.0.canvas_size.width * artwork.0.canvas_size.height * 4) as usize,
-    );
+    match artwork.0.get_frame_image(0, px.layer_visibility) {
+      Ok(image_buf) => {
+        let mut image = Image::new(
+          Extent3d {
+            width: artwork.0.canvas_size.width,
+            height: artwork.0.canvas_size.height,
+            depth_or_array_layers: 1,
+          },
+          TextureDimension::D2,
+          image_buf,
+          TextureFormat::Rgba8UnormSrgb,
+          RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        );
+        image.sampler = ImageSampler::nearest();
 
-    for color in artwork.0.frame_contents[0].colors.iter() {
-      rgba_bytes.push(color.r);
-      rgba_bytes.push(color.g);
-      rgba_bytes.push(color.b);
-      rgba_bytes.push(color.a);
+        let texture_handle = images.add(image);
+        target.render_px(texture_handle, &mut extra);
+      }
+      Err(err) => {
+        error!("{}", err);
+      }
     }
-
-    let mut image = Image::new(
-      Extent3d {
-        width: artwork.0.canvas_size.width,
-        height: artwork.0.canvas_size.height,
-        depth_or_array_layers: 1,
-      },
-      TextureDimension::D2,
-      rgba_bytes,
-      TextureFormat::Rgba8UnormSrgb,
-      RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    );
-
-    image.sampler = ImageSampler::nearest();
-
-    let texture_handle = images.add(image);
-    target.render_px(texture_handle, &mut extra);
   }
 }
 
