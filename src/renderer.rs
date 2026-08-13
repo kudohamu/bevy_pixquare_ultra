@@ -8,7 +8,7 @@ use bevy::{
     world::Ref,
   },
   image::{Image, ImageSampler},
-  log::{debug, error},
+  log::error,
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
 };

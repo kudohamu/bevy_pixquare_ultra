@@ -54,8 +54,8 @@ impl AssetLoader for PixquareLoader {
   async fn load(
     &self,
     reader: &mut dyn bevy::asset::io::Reader,
-    settings: &Self::Settings,
-    load_context: &mut bevy::asset::LoadContext<'_>,
+    _settings: &Self::Settings,
+    _load_context: &mut bevy::asset::LoadContext<'_>,
   ) -> Result<Self::Asset, Self::Error> {
     let mut bytes = Vec::new();
     reader.read_to_end(&mut bytes).await?;

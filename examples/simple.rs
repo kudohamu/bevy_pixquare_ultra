@@ -26,6 +26,7 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
     PixquareFile {
       artwork: server.load("orange.px"),
       layer_visibility: LayerVisibility::Visible,
+      ..default()
     },
     Sprite::default(),
     Transform::from_xyz(0., 0., 0.),
