@@ -158,15 +158,19 @@ fn update_frame_index(
       continue;
     };
 
-    let Some(timer) = animation_status.animation_timer.as_mut() else {
-      animation_status.animation_timer = Some(Timer::from_seconds(
-        frame_animation.duration,
-        TimerMode::Once,
-      ));
-      continue;
+    let timer = match animation_status.animation_timer.as_mut() {
+      Some(timer) => timer,
+      None => {
+        let timer = Timer::from_seconds(frame_animation.duration, TimerMode::Once);
+        animation_status.animation_timer = Some(timer);
+
+        animation_status.animation_timer.as_mut().unwrap()
+      }
     };
 
-    if timer.is_finished() {
+    timer.tick(time.delta());
+
+    if timer.just_finished() {
       if frame_animation.loop_count != 0 {
         if animation_status.loop_count >= frame_animation.loop_count {
           frame_animation.play_state = AnimationState::Paused;
@@ -180,8 +184,6 @@ fn update_frame_index(
       let next_frame_index = frame_animation.next_frame(&artwork, &animation_status);
       animation_status.frame_index = next_frame_index;
       animation_status.animation_timer = None;
-    } else {
-      timer.tick(time.delta());
     }
   }
 }
@@ -216,5 +218,119 @@ impl PxFrameAnimation {
 
       0 + (status.frame_index as i16 - 0 + delta).rem_euclid(frames_len as i16 - 0) as u16
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::time::Duration;
+
+  use bevy::{
+    app::App,
+    asset::Assets,
+    ecs::entity::Entity,
+    image::Image,
+    sprite::Sprite,
+    time::{TimePlugin, TimeUpdateStrategy},
+  };
+  use pixquare::model::Artwork;
+
+  use super::*;
+
+  const FRAME_DURATION: Duration = Duration::from_millis(100);
+  const TIME_STEP: Duration = Duration::from_millis(101);
+
+  fn create_px_file_app(path: &str) -> (App, Entity) {
+    let mut app = App::new();
+    app
+      .add_plugins((TimePlugin, PixquareRendererPlugin))
+      .insert_resource(TimeUpdateStrategy::ManualDuration(TIME_STEP))
+      .insert_resource(Assets::<PxArtwork>::default())
+      .insert_resource(Assets::<Image>::default());
+
+    app.update();
+
+    let file_data = std::fs::read(path).unwrap();
+    let artwork = Artwork::read(&file_data).unwrap();
+
+    let artwork = app
+      .world_mut()
+      .resource_mut::<Assets<PxArtwork>>()
+      .add(PxArtwork(artwork.clone()));
+
+    let entity = app
+      .world_mut()
+      .spawn((
+        PixquareFile {
+          artwork,
+          ..Default::default()
+        },
+        Sprite::default(),
+      ))
+      .id();
+
+    (app, entity)
+  }
+
+  #[test]
+  fn test_advances_to_next_frame_when_entity_has_px_animation_frame_component() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, 1);
+  }
+
+  #[test]
+  fn test_wraps_to_first_frame_when_current_frame_is_last() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
+    let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
+    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
+    let frames_len = artwork.frames_len() as u16;
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PxAnimationStatus>()
+      .unwrap()
+      .frame_index = frames_len - 2;
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, frames_len - 1);
   }
 }
