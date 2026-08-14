@@ -8,13 +8,13 @@ use bevy::{
     world::Ref,
   },
   image::{Image, ImageSampler},
-  log::{debug, error},
+  log::error,
   prelude::AssetChanged,
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
   time::{Time, Timer, TimerMode},
 };
-use pixquare::{model::Artwork, utility_type::LayerVisibility};
+use pixquare::utility_type::LayerVisibility;
 
 use crate::{
   data_type::{AnimationDirection, AnimationState},
@@ -70,6 +70,7 @@ impl Default for PxFrameAnimation {
 struct PxAnimationStatus {
   pub frame_index: u16,
   pub current_direction: AnimationDirection,
+  pub loop_count: u16,
   pub animation_timer: Option<Timer>,
 }
 
@@ -78,6 +79,7 @@ impl Default for PxAnimationStatus {
     Self {
       frame_index: 0,
       current_direction: AnimationDirection::Forward,
+      loop_count: 0,
       animation_timer: None,
     }
   }
@@ -144,11 +146,11 @@ fn render<T: RenderPx + Component<Mutability = Mutable>>(
 }
 
 fn update_frame_index(
-  q_px: Query<(&PixquareFile, &PxFrameAnimation, &mut PxAnimationStatus)>,
+  q_px: Query<(&PixquareFile, &mut PxFrameAnimation, &mut PxAnimationStatus)>,
   res_pxartworks: Res<Assets<PxArtwork>>,
   time: Res<Time>,
 ) {
-  for (px_file, frame_animation, mut animation_status) in q_px {
+  for (px_file, mut frame_animation, mut animation_status) in q_px {
     if frame_animation.play_state == AnimationState::Paused {
       continue;
     }
@@ -165,9 +167,16 @@ fn update_frame_index(
     };
 
     if timer.is_finished() {
-      if frame_animation.loop_count != 0 && animation_status.frame_index >= 6 {
-        continue;
+      if frame_animation.loop_count != 0 {
+        if animation_status.loop_count >= frame_animation.loop_count {
+          frame_animation.play_state = AnimationState::Paused;
+          continue;
+        }
+        if animation_status.frame_index as usize >= artwork.0.frames_len() {
+          animation_status.loop_count += 1;
+        }
       }
+
       let next_frame_index = frame_animation.next_frame(&artwork, &animation_status);
       animation_status.frame_index = next_frame_index;
       animation_status.animation_timer = None;
