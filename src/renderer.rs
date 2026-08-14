@@ -3,8 +3,11 @@ use bevy::{
   asset::{AsAssetId, Assets, Handle, RenderAssetUsages},
   ecs::{
     component::{Component, Mutable},
-    query::{Changed, Or},
-    system::{Query, Res, ResMut},
+    entity::Entity,
+    lifecycle::RemovedComponents,
+    query::{Added, Changed, Or},
+    schedule::IntoScheduleConfigs,
+    system::{Commands, Query, Res, ResMut},
     world::Ref,
   },
   image::{Image, ImageSampler},
@@ -13,6 +16,7 @@ use bevy::{
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
   time::{Time, Timer, TimerMode},
+  utils::default,
 };
 use pixquare::utility_type::LayerVisibility;
 
@@ -22,7 +26,6 @@ use crate::{
 };
 
 #[derive(Debug, Component)]
-#[require(PxAnimationStatus)]
 pub struct PixquareFile {
   pub artwork: Handle<PxArtwork>,
   pub layer_visibility: LayerVisibility,
@@ -145,6 +148,34 @@ fn render<T: RenderPx + Component<Mutability = Mutable>>(
   }
 }
 
+fn detect_added_animation_component(
+  mut commands: Commands,
+  q_px: Query<(Entity, &PixquareFile, &PxFrameAnimation), Added<PxFrameAnimation>>,
+) {
+  for (entity, _px_file, frame_animation) in q_px {
+    let initial_direction = match frame_animation.direction {
+      AnimationDirection::Forward => AnimationDirection::Forward,
+      AnimationDirection::Backward => AnimationDirection::Backward,
+      AnimationDirection::PingPong => AnimationDirection::Forward,
+    };
+    // TODO: create initial frame_index from px_file and tag of frame_animation
+    let status = PxAnimationStatus {
+      current_direction: initial_direction,
+      ..default()
+    };
+    commands.entity(entity).insert(status);
+  }
+}
+
+fn detect_removed_animation_component(
+  mut removed: RemovedComponents<PxFrameAnimation>,
+  mut commands: Commands,
+) {
+  for entity in removed.read() {
+    commands.entity(entity).remove::<PxAnimationStatus>();
+  }
+}
+
 fn update_frame_index(
   q_px: Query<(&PixquareFile, &mut PxFrameAnimation, &mut PxAnimationStatus)>,
   res_pxartworks: Res<Assets<PxArtwork>>,
@@ -193,7 +224,17 @@ pub struct PixquareRendererPlugin;
 
 impl Plugin for PixquareRendererPlugin {
   fn build(&self, app: &mut bevy::app::App) {
-    app.add_systems(PostUpdate, (render::<Sprite>, update_frame_index));
+    app.add_systems(
+      PostUpdate,
+      (
+        (
+          detect_added_animation_component,
+          detect_removed_animation_component,
+        ),
+        (render::<Sprite>, update_frame_index),
+      )
+        .chain(),
+    );
   }
 }
 
@@ -316,6 +357,8 @@ mod tests {
         ..Default::default()
       });
 
+    app.update();
+
     app
       .world_mut()
       .entity_mut(entity)
@@ -332,5 +375,70 @@ mod tests {
       .unwrap();
 
     assert_eq!(status.frame_index, frames_len - 1);
+  }
+
+  #[test]
+  fn test_advance_to_previous_frame_when_direction_is_backward() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        direction: AnimationDirection::Backward,
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PxAnimationStatus>()
+      .unwrap()
+      .frame_index = 1;
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, 0);
+  }
+
+  #[test]
+  fn test_wraps_to_last_frame_when_direction_is_backward_and_current_frame_is_first() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        direction: AnimationDirection::Backward,
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
+    let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
+    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
+
+    assert_eq!(status.frame_index, artwork.frames_len() as u16 - 1);
   }
 }
