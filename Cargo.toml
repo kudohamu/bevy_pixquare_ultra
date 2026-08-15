@@ -12,3 +12,4 @@ pixquare-io = { path = "../pixquare-io" }
 bevy = { version = "0.18", features = [
   "bevy_window"
 ] }
+bevy_asset_loader = "0.26.0"
