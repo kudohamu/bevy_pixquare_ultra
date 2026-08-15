@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use bevy::{
   app::{Plugin, PostUpdate},
   asset::{AsAssetId, Assets, Handle, RenderAssetUsages},
@@ -11,7 +13,7 @@ use bevy::{
     world::Ref,
   },
   image::{Image, ImageSampler},
-  log::error,
+  log::{error, warn},
   prelude::AssetChanged,
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
@@ -151,16 +153,30 @@ fn render<T: RenderPx + Component<Mutability = Mutable>>(
 fn detect_added_animation_component(
   mut commands: Commands,
   q_px: Query<(Entity, &PixquareFile, &PxFrameAnimation), Added<PxFrameAnimation>>,
+  res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
-  for (entity, _px_file, frame_animation) in q_px {
+  for (entity, px_file, frame_animation) in q_px {
+    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+      warn!("the artwork file is not loaded yet. please preload the artwork file");
+      continue;
+    };
+
     let initial_direction = match frame_animation.direction {
       AnimationDirection::Forward => AnimationDirection::Forward,
       AnimationDirection::Backward => AnimationDirection::Backward,
       AnimationDirection::PingPong => AnimationDirection::Forward,
     };
-    // TODO: create initial frame_index from px_file and tag of frame_animation
+    let frame_index: u16 = if let Some(tag) = &frame_animation.tag {
+      let tag_range = artwork.get_tag_range(&tag);
+
+      tag_range.start
+    } else {
+      0
+    };
+
     let status = PxAnimationStatus {
       current_direction: initial_direction,
+      frame_index,
       ..default()
     };
     commands.entity(entity).insert(status);
@@ -252,6 +268,19 @@ impl Plugin for PixquareRendererPlugin {
   }
 }
 
+impl PxArtwork {
+  fn get_tag_range(&self, tag: &str) -> Range<u16> {
+    let Some(tag) = self.0.tags.iter().find(|t| t.name == tag) else {
+      warn!("tag: `{}` is not found", tag);
+      let frames_len = self.0.frames_len();
+
+      return 0..frames_len as u16;
+    };
+
+    tag.start_index..(tag.end_index + 1)
+  }
+}
+
 impl PxFrameAnimation {
   fn next_frame(&self, artwork: &PxArtwork, status: &PxAnimationStatus) -> u16 {
     let delta: i16 = if status.current_direction == AnimationDirection::Forward {
@@ -260,19 +289,16 @@ impl PxFrameAnimation {
       -1
     };
 
-    if let Some(_tag) = &self.tag {
-      0
+    let index_range = if let Some(tag) = &self.tag {
+      artwork.get_tag_range(&tag)
     } else {
-      let layer_frames_len = artwork.0.layers.get(0).map_or(0, |l| l.frames.len());
-      let tilemap_layer_frames_len = artwork
-        .0
-        .tilemap_layers
-        .get(0)
-        .map_or(0, |l| l.frames.len());
-      let frames_len = layer_frames_len.max(tilemap_layer_frames_len);
+      0..(artwork.0.frames_len() as u16 - 1)
+    };
 
-      0 + (status.frame_index as i16 - 0 + delta).rem_euclid(frames_len as i16 - 0) as u16
-    }
+    let min = index_range.start as i16;
+    let max = index_range.end as i16;
+
+    min as u16 + (status.frame_index as i16 - min + delta).rem_euclid(max - min) as u16
   }
 }
 
