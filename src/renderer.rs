@@ -207,7 +207,7 @@ fn update_frame_index(
           frame_animation.play_state = AnimationState::Paused;
           continue;
         }
-        if animation_status.frame_index as usize >= artwork.0.frames_len() {
+        if animation_status.frame_index as usize >= artwork.0.frames_len() - 1 {
           animation_status.loop_count += 1;
         }
       }
@@ -215,6 +215,20 @@ fn update_frame_index(
       let next_frame_index = frame_animation.next_frame(&artwork, &animation_status);
       animation_status.frame_index = next_frame_index;
       animation_status.animation_timer = None;
+
+      if frame_animation.direction == AnimationDirection::PingPong {
+        if animation_status.current_direction == AnimationDirection::Forward
+          && animation_status.frame_index as usize >= artwork.0.frames_len() - 1
+        {
+          animation_status.current_direction = AnimationDirection::Backward;
+        }
+
+        if animation_status.current_direction == AnimationDirection::Backward
+          && animation_status.frame_index == 0
+        {
+          animation_status.current_direction = AnimationDirection::Forward;
+        }
+      }
     }
   }
 }
@@ -440,5 +454,125 @@ mod tests {
     let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
 
     assert_eq!(status.frame_index, artwork.frames_len() as u16 - 1);
+  }
+
+  #[test]
+  fn test_reverses_to_backward_at_last_frame_when_direction_is_ping_pong() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
+    let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
+    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
+    let frames_len = artwork.frames_len() as u16;
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        direction: AnimationDirection::PingPong,
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    let mut entity_mut = app.world_mut().entity_mut(entity);
+    let mut status = entity_mut.get_mut::<PxAnimationStatus>().unwrap();
+    status.frame_index = frames_len - 2;
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, frames_len - 1);
+    assert_eq!(status.current_direction, AnimationDirection::Backward);
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, frames_len - 2);
+    assert_eq!(status.current_direction, AnimationDirection::Backward);
+  }
+
+  #[test]
+  fn test_reverses_to_forward_at_first_frame_when_direction_is_ping_pong() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        direction: AnimationDirection::PingPong,
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    let mut entity_mut = app.world_mut().entity_mut(entity);
+    let mut status = entity_mut.get_mut::<PxAnimationStatus>().unwrap();
+    status.frame_index = 1;
+    status.current_direction = AnimationDirection::Backward;
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, 0);
+    assert_eq!(status.current_direction, AnimationDirection::Forward);
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, 1);
+    assert_eq!(status.current_direction, AnimationDirection::Forward);
+  }
+
+  #[test]
+  fn test_stays_on_first_frame_when_ping_pong_artwork_has_one_frame() {
+    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: FRAME_DURATION.as_secs_f32(),
+        direction: AnimationDirection::PingPong,
+        loop_count: 0,
+        ..Default::default()
+      });
+
+    app.update();
+
+    let status = app
+      .world()
+      .entity(entity)
+      .get::<PxAnimationStatus>()
+      .unwrap();
+
+    assert_eq!(status.frame_index, 0);
   }
 }
