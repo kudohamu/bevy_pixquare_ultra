@@ -77,6 +77,7 @@ struct PxAnimationStatus {
   pub current_direction: AnimationDirection,
   pub loop_count: u16,
   pub animation_timer: Option<Timer>,
+  pub current_tag: Option<String>,
 }
 
 impl Default for PxAnimationStatus {
@@ -86,6 +87,7 @@ impl Default for PxAnimationStatus {
       current_direction: AnimationDirection::Forward,
       loop_count: 0,
       animation_timer: None,
+      current_tag: None,
     }
   }
 }
@@ -177,6 +179,7 @@ fn detect_added_animation_component(
     let status = PxAnimationStatus {
       current_direction: initial_direction,
       frame_index,
+      current_tag: frame_animation.tag.clone(),
       ..default()
     };
     commands.entity(entity).insert(status);
@@ -189,6 +192,33 @@ fn detect_removed_animation_component(
 ) {
   for entity in removed.read() {
     commands.entity(entity).remove::<PxAnimationStatus>();
+  }
+}
+
+fn detect_updated_frame_animation_component(
+  q_px: Query<
+    (&PixquareFile, &PxFrameAnimation, &mut PxAnimationStatus),
+    Changed<PxFrameAnimation>,
+  >,
+  res_pxartworks: Res<Assets<PxArtwork>>,
+) {
+  for (px_file, frame_animation, mut status) in q_px {
+    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+      continue;
+    };
+
+    if status.current_tag != frame_animation.tag {
+      let frame_index: u16 = if let Some(tag) = &frame_animation.tag {
+        let tag_range = artwork.get_tag_range(&tag);
+
+        tag_range.start
+      } else {
+        0
+      };
+
+      status.frame_index = frame_index;
+      status.current_tag = frame_animation.tag.clone();
+    }
   }
 }
 
@@ -260,6 +290,7 @@ impl Plugin for PixquareRendererPlugin {
         (
           detect_added_animation_component,
           detect_removed_animation_component,
+          detect_updated_frame_animation_component,
         ),
         (render::<Sprite>, update_frame_index),
       )
