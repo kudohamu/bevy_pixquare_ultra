@@ -2,7 +2,7 @@ use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_pixquare_ultra::{
   PixquareUltraPlugin,
-  data_type::AnimationState,
+  data_type::AnimationPlayState,
   loader::PxArtwork,
   renderer::{PixquareFile, PxFrameAnimation},
 };
@@ -58,7 +58,7 @@ fn setup_main_scene(mut commands: Commands, assets: Res<ArtworkAssets>) {
     PxFrameAnimation {
       tag: Some("front_move".into()),
       duration: 0.3,
-      play_state: AnimationState::Playing,
+      play_state: AnimationPlayState::Playing,
       ..default()
     },
     Sprite::default(),
@@ -73,18 +73,18 @@ fn detect_key_input(
   for mut frame_animation in q_frame_animations {
     if input.pressed(KeyCode::KeyW) {
       frame_animation.tag = Some("back_move".into());
-      frame_animation.play_state = AnimationState::Playing;
+      frame_animation.play_state = AnimationPlayState::Playing;
     } else if input.pressed(KeyCode::KeyD) {
       frame_animation.tag = Some("right_move".into());
-      frame_animation.play_state = AnimationState::Playing;
+      frame_animation.play_state = AnimationPlayState::Playing;
     } else if input.pressed(KeyCode::KeyA) {
       frame_animation.tag = Some("right_move".into());
-      frame_animation.play_state = AnimationState::Playing;
+      frame_animation.play_state = AnimationPlayState::Playing;
     } else if input.pressed(KeyCode::KeyS) {
       frame_animation.tag = Some("front_move".into());
-      frame_animation.play_state = AnimationState::Playing;
+      frame_animation.play_state = AnimationPlayState::Playing;
     } else {
-      frame_animation.play_state = AnimationState::Paused;
+      frame_animation.play_state = AnimationPlayState::Paused;
 
       if let Some(tag) = &frame_animation.tag {
         if tag == "front_move" {

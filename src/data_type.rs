@@ -6,7 +6,7 @@ pub enum AnimationDirection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AnimationState {
+pub enum AnimationPlayState {
   Playing,
   Paused,
 }
