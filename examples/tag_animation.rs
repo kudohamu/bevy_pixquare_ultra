@@ -67,22 +67,26 @@ fn setup_main_scene(mut commands: Commands, assets: Res<ArtworkAssets>) {
 }
 
 fn detect_key_input(
-  q_frame_animations: Query<&mut PxFrameAnimation>,
+  q_frame_animations: Query<(&mut Sprite, &mut PxFrameAnimation)>,
   input: Res<ButtonInput<KeyCode>>,
 ) {
-  for mut frame_animation in q_frame_animations {
+  for (mut sprite, mut frame_animation) in q_frame_animations {
     if input.pressed(KeyCode::KeyW) {
       frame_animation.tag = Some("back_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
+      sprite.flip_x = false;
     } else if input.pressed(KeyCode::KeyD) {
       frame_animation.tag = Some("right_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
+      sprite.flip_x = false;
     } else if input.pressed(KeyCode::KeyA) {
       frame_animation.tag = Some("right_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
+      sprite.flip_x = true;
     } else if input.pressed(KeyCode::KeyS) {
       frame_animation.tag = Some("front_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
+      sprite.flip_x = false;
     } else {
       frame_animation.play_state = AnimationPlayState::Paused;
 
