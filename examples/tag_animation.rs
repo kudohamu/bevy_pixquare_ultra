@@ -1,17 +1,10 @@
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_asset_loader::prelude::*;
 use bevy_pixquare_ultra::{
   PixquareUltraPlugin,
   data_type::AnimationPlayState,
   loader::PxArtwork,
-  renderer::{PixquareFile, PxFrameAnimation},
+  renderer::{PixquareFile, PxFrameAnimation, PxTag},
 };
-
-#[derive(AssetCollection, Resource)]
-struct ArtworkAssets {
-  #[asset(path = "character_move.px")]
-  character_move: Handle<PxArtwork>,
-}
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 enum SceneState {
@@ -33,30 +26,20 @@ fn main() {
         }),
     )
     .add_plugins(PixquareUltraPlugin)
-    .init_state::<SceneState>()
-    .add_loading_state(
-      LoadingState::new(SceneState::AssetLoading)
-        .continue_to_state(SceneState::Main)
-        .load_collection::<ArtworkAssets>(),
-    )
     .add_systems(Startup, setup)
-    .add_systems(OnEnter(SceneState::Main), setup_main_scene)
     .add_systems(Update, detect_key_input)
     .run();
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, server: Res<AssetServer>) {
   commands.spawn((Camera2d, Transform::default().with_scale(Vec3::splat(0.1))));
-}
-
-fn setup_main_scene(mut commands: Commands, assets: Res<ArtworkAssets>) {
   commands.spawn((
     PixquareFile {
-      artwork: assets.character_move.clone(),
+      artwork: server.load("character_move.px"),
       ..default()
     },
+    PxTag::new("front".into()),
     PxFrameAnimation {
-      tag: Some("front_move".into()),
       duration: 0.3,
       play_state: AnimationPlayState::Playing,
       ..default()
@@ -67,39 +50,44 @@ fn setup_main_scene(mut commands: Commands, assets: Res<ArtworkAssets>) {
 }
 
 fn detect_key_input(
-  q_frame_animations: Query<(&mut Sprite, &mut PxFrameAnimation)>,
+  mut commands: Commands,
+  q_frame_animations: Query<(Entity, &mut Sprite, &mut PxFrameAnimation, &mut PxTag)>,
   input: Res<ButtonInput<KeyCode>>,
 ) {
-  for (mut sprite, mut frame_animation) in q_frame_animations {
+  for (entity, mut sprite, mut frame_animation, mut px_tag) in q_frame_animations {
     if input.pressed(KeyCode::KeyW) {
-      frame_animation.tag = Some("back_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
       sprite.flip_x = false;
+      commands
+        .entity(entity)
+        .insert(PxTag::new("back_move".into()));
     } else if input.pressed(KeyCode::KeyD) {
-      frame_animation.tag = Some("right_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
       sprite.flip_x = false;
+      commands
+        .entity(entity)
+        .insert(PxTag::new("right_move".into()));
     } else if input.pressed(KeyCode::KeyA) {
-      frame_animation.tag = Some("right_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
       sprite.flip_x = true;
+      commands
+        .entity(entity)
+        .insert(PxTag::new("right_move".into()));
     } else if input.pressed(KeyCode::KeyS) {
-      frame_animation.tag = Some("front_move".into());
       frame_animation.play_state = AnimationPlayState::Playing;
       sprite.flip_x = false;
+      commands
+        .entity(entity)
+        .insert(PxTag::new("front_move".into()));
     } else {
       frame_animation.play_state = AnimationPlayState::Paused;
 
-      if let Some(tag) = &frame_animation.tag {
-        if tag == "front_move" {
-          frame_animation.tag = Some("front".into());
-        } else if tag == "right_move" {
-          frame_animation.tag = Some("right".into());
-        } else if tag == "back_move" {
-          frame_animation.tag = Some("back".into());
-        }
-      } else {
-        frame_animation.tag = Some("front".into());
+      if px_tag.0 == "front_move" {
+        px_tag.0 = "front".into();
+      } else if px_tag.0 == "right_move" {
+        px_tag.0 = "right".into();
+      } else if px_tag.0 == "back_move" {
+        px_tag.0 = "back".into();
       }
     }
   }
