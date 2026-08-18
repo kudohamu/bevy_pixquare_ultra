@@ -7,7 +7,7 @@ use bevy::{
     component::{Component, Mutable},
     entity::Entity,
     lifecycle::RemovedComponents,
-    query::{Added, Changed, Or},
+    query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut},
     world::Ref,
@@ -18,7 +18,6 @@ use bevy::{
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
   time::{Time, Timer, TimerMode},
-  utils::default,
 };
 use pixquare::utility_type::LayerVisibility;
 
@@ -28,6 +27,7 @@ use crate::{
 };
 
 #[derive(Debug, Component)]
+#[require(PxState, PendingPxInitialization)]
 pub struct PixquareFile {
   pub artwork: Handle<PxArtwork>,
   pub layer_visibility: LayerVisibility,
@@ -101,6 +101,28 @@ impl Default for PxState {
   }
 }
 
+impl PxState {
+  fn next_frame(&self, artwork: &PxArtwork) -> u16 {
+    let delta: i16 = if self.temporary_direction == AnimationDirection::Forward {
+      1
+    } else {
+      -1
+    };
+
+    let index_range = artwork.get_tag_range(&self.current_tag);
+    let min = index_range.start as i16;
+    let max = index_range.end as i16;
+
+    if max == min {
+      return min as u16;
+    }
+    min as u16 + (self.frame_index as i16 - min + delta).rem_euclid(max - min) as u16
+  }
+}
+
+#[derive(Component, Default)]
+struct PendingPxInitialization;
+
 trait RenderPx {
   type Extra<'e>;
 
@@ -112,6 +134,39 @@ impl RenderPx for Sprite {
 
   fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
     self.image = texture;
+  }
+}
+
+impl PxArtwork {
+  fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
+    match tag {
+      Some(tag) => {
+        let Some(tag) = self.0.tags.iter().find(|t| t.name == *tag) else {
+          warn!("tag: `{}` is not found", tag);
+
+          return 0..self.0.frames_len() as u16;
+        };
+
+        tag.start_index..(tag.end_index + 1)
+      }
+      None => {
+        return 0..self.0.frames_len() as u16;
+      }
+    }
+  }
+
+  fn get_initial_frame_index(&self, tag: &Option<String>, direction: AnimationDirection) -> u16 {
+    let range = self.get_tag_range(tag);
+
+    match direction {
+      AnimationDirection::Forward => range.start,
+      AnimationDirection::Backward => range.end - 1,
+      AnimationDirection::PingPong => range.start,
+    }
+  }
+
+  fn is_valid_tag(&self, tag: &str) -> bool {
+    self.0.tags.iter().position(|t| t.name == tag).is_some()
   }
 }
 
@@ -161,23 +216,58 @@ fn render<T: RenderPx + Component<Mutability = Mutable>>(
   }
 }
 
-fn detect_added_pixquare_file_component(
+fn initialize_pending_px_files(
   mut commands: Commands,
-  q_px: Query<Entity, Added<PixquareFile>>,
+  mut q_px: Query<
+    (
+      Entity,
+      &PixquareFile,
+      Option<&PxTag>,
+      Option<&PxFrameAnimation>,
+      &mut PxState,
+    ),
+    With<PendingPxInitialization>,
+  >,
+  artworks: Res<Assets<PxArtwork>>,
 ) {
-  for entity in q_px {
-    let px_state = PxState { ..default() };
+  for (entity, px_file, px_tag, frame_animation, mut px_state) in &mut q_px {
+    let Some(artwork) = artworks.get(&px_file.artwork) else {
+      continue;
+    };
 
-    commands.entity(entity).insert(px_state);
+    let current_tag = px_tag.map_or(None, |tag| {
+      if artwork.is_valid_tag(&tag.0) {
+        return Some(tag.0.clone());
+      }
+      None
+    });
+
+    px_state.current_tag = current_tag;
+
+    let current_direction = frame_animation.map_or(AnimationDirection::Forward, |f| f.direction);
+    let initial_direction = match current_direction {
+      AnimationDirection::Forward => AnimationDirection::Forward,
+      AnimationDirection::Backward => AnimationDirection::Backward,
+      AnimationDirection::PingPong => AnimationDirection::Forward,
+    };
+
+    px_state.current_direction = current_direction;
+    px_state.temporary_direction = initial_direction;
+    px_state.frame_index =
+      artwork.get_initial_frame_index(&px_state.current_tag, initial_direction);
+    px_state.loop_count = 0;
+    px_state.animation_timer = None;
+
+    commands.entity(entity).remove::<PendingPxInitialization>();
   }
 }
 
-fn detect_removed_pixquare_file_component(
-  mut removed: RemovedComponents<PixquareFile>,
+fn mark_changed_px_files_as_pending(
   mut commands: Commands,
+  query: Query<Entity, Changed<PixquareFile>>,
 ) {
-  for entity in removed.read() {
-    commands.entity(entity).remove::<PxState>();
+  for entity in &query {
+    commands.entity(entity).insert(PendingPxInitialization);
   }
 }
 
@@ -189,13 +279,12 @@ fn detect_added_animation_component(
       &PxFrameAnimation,
       &mut PxState,
     ),
-    Added<PxFrameAnimation>,
+    (Without<PendingPxInitialization>, Added<PxFrameAnimation>),
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
-  for (px_file, tag, frame_animation, mut px_state) in q_px {
+  for (px_file, px_tag, frame_animation, mut px_state) in q_px {
     let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
-      warn!("the artwork file is not loaded yet. please preload the artwork file");
       continue;
     };
 
@@ -208,21 +297,35 @@ fn detect_added_animation_component(
     px_state.current_direction = frame_animation.direction;
     px_state.temporary_direction = initial_direction;
     px_state.frame_index =
-      artwork.get_initial_frame_index(tag.map(move |t| t.0.clone()), initial_direction);
+      artwork.get_initial_frame_index(&px_tag.map(|t| t.0.clone()), initial_direction);
   }
 }
 
 fn detect_removed_animation_component(
   mut removed: RemovedComponents<PxFrameAnimation>,
-  mut commands: Commands,
+  mut q_px: Query<(&PixquareFile, Option<&PxTag>, &mut PxState), Without<PendingPxInitialization>>,
+  res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for entity in removed.read() {
-    commands.entity(entity).remove::<PxState>();
+    let Ok((px_file, px_tag, mut px_state)) = q_px.get_mut(entity) else {
+      continue;
+    };
+    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+      continue;
+    };
+
+    px_state.frame_index =
+      artwork.get_initial_frame_index(&px_tag.map(|t| t.0.clone()), AnimationDirection::Forward);
+    px_state.current_direction = AnimationDirection::Forward;
+    px_state.temporary_direction = AnimationDirection::Forward;
   }
 }
 
 fn detect_updated_frame_animation_component(
-  q_px: Query<(&PixquareFile, &PxFrameAnimation, &mut PxState), Changed<PxFrameAnimation>>,
+  q_px: Query<
+    (&PixquareFile, &PxFrameAnimation, &mut PxState),
+    (Without<PendingPxInitialization>, Changed<PxFrameAnimation>),
+  >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for (px_file, frame_animation, mut px_state) in q_px {
@@ -242,7 +345,7 @@ fn detect_updated_frame_animation_component(
       px_state.loop_count = 0;
 
       px_state.frame_index =
-        artwork.get_initial_frame_index(px_state.current_tag.clone(), px_state.temporary_direction);
+        artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
     }
   }
 }
@@ -255,7 +358,10 @@ fn detect_added_or_updated_tag_component(
       &mut PxState,
       Option<&PxFrameAnimation>,
     ),
-    Or<(Added<PxTag>, Changed<PxTag>)>,
+    (
+      Without<PendingPxInitialization>,
+      Or<(Added<PxTag>, Changed<PxTag>)>,
+    ),
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
@@ -274,9 +380,9 @@ fn detect_added_or_updated_tag_component(
       continue;
     }
 
-    px_state.frame_index =
-      artwork.get_initial_frame_index(Some(px_tag.0.clone()), px_state.temporary_direction);
     px_state.current_tag = Some(px_tag.0.clone());
+    px_state.frame_index =
+      artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
 
     if let Some(frame_animation) = frame_animation {
       let initial_direction = match frame_animation.direction {
@@ -294,7 +400,10 @@ fn detect_added_or_updated_tag_component(
 
 fn detect_removed_tag_component(
   mut removed: RemovedComponents<PxTag>,
-  mut q_px: Query<(&PixquareFile, &mut PxState, Option<&PxFrameAnimation>)>,
+  mut q_px: Query<
+    (&PixquareFile, &mut PxState, Option<&PxFrameAnimation>),
+    Without<PendingPxInitialization>,
+  >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for entity in removed.read() {
@@ -306,7 +415,7 @@ fn detect_removed_tag_component(
     };
 
     animation_state.frame_index =
-      artwork.get_initial_frame_index(None, animation_state.temporary_direction);
+      artwork.get_initial_frame_index(&None, animation_state.temporary_direction);
     animation_state.current_tag = None;
 
     if let Some(frame_animation) = frame_animation {
@@ -324,7 +433,10 @@ fn detect_removed_tag_component(
 }
 
 fn update_frame_index(
-  q_px: Query<(&PixquareFile, &mut PxFrameAnimation, &mut PxState)>,
+  q_px: Query<
+    (&PixquareFile, &mut PxFrameAnimation, &mut PxState),
+    Without<PendingPxInitialization>,
+  >,
   res_pxartworks: Res<Assets<PxArtwork>>,
   time: Res<Time>,
 ) {
@@ -364,7 +476,7 @@ fn update_frame_index(
       px_state.animation_timer = None;
 
       if px_state.current_direction == AnimationDirection::PingPong {
-        let range = artwork.get_tag_range(px_state.current_tag.clone());
+        let range = artwork.get_tag_range(&px_state.current_tag);
 
         if px_state.temporary_direction == AnimationDirection::Forward
           && px_state.frame_index >= range.end - 1
@@ -391,8 +503,10 @@ impl Plugin for PixquareRendererPlugin {
       PostUpdate,
       (
         (
-          detect_added_pixquare_file_component,
-          detect_removed_pixquare_file_component,
+          (
+            initialize_pending_px_files,
+            mark_changed_px_files_as_pending,
+          ),
           (
             detect_added_or_updated_tag_component,
             detect_removed_tag_component,
@@ -409,58 +523,6 @@ impl Plugin for PixquareRendererPlugin {
   }
 }
 
-impl PxArtwork {
-  fn get_tag_range(&self, tag: Option<String>) -> Range<u16> {
-    match tag {
-      Some(tag) => {
-        let Some(tag) = self.0.tags.iter().find(|t| t.name == tag) else {
-          warn!("tag: `{}` is not found", tag);
-
-          return 0..self.0.frames_len() as u16;
-        };
-
-        tag.start_index..(tag.end_index + 1)
-      }
-      None => {
-        return 0..self.0.frames_len() as u16;
-      }
-    }
-  }
-
-  fn get_initial_frame_index(&self, tag: Option<String>, direction: AnimationDirection) -> u16 {
-    let range = self.get_tag_range(tag);
-
-    match direction {
-      AnimationDirection::Forward => range.start,
-      AnimationDirection::Backward => range.end - 1,
-      AnimationDirection::PingPong => range.start,
-    }
-  }
-
-  fn is_valid_tag(&self, tag: &str) -> bool {
-    self.0.tags.iter().position(|t| t.name == tag).is_some()
-  }
-}
-
-impl PxState {
-  fn next_frame(&self, artwork: &PxArtwork) -> u16 {
-    let delta: i16 = if self.temporary_direction == AnimationDirection::Forward {
-      1
-    } else {
-      -1
-    };
-
-    let index_range = artwork.get_tag_range(self.current_tag.clone());
-    let min = index_range.start as i16;
-    let max = index_range.end as i16;
-
-    if max == min {
-      return min as u16;
-    }
-    min as u16 + (self.frame_index as i16 - min + delta).rem_euclid(max - min) as u16
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use std::{assert_eq, time::Duration};
@@ -472,6 +534,7 @@ mod tests {
     image::Image,
     sprite::Sprite,
     time::{TimePlugin, TimeUpdateStrategy},
+    utils::default,
   };
   use pixquare::model::Artwork;
 

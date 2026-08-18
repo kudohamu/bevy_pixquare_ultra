@@ -2,16 +2,8 @@ use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{
   PixquareUltraPlugin,
   data_type::AnimationPlayState,
-  loader::PxArtwork,
   renderer::{PixquareFile, PxFrameAnimation, PxTag},
 };
-
-#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
-enum SceneState {
-  #[default]
-  AssetLoading,
-  Main,
-}
 
 fn main() {
   App::new()
