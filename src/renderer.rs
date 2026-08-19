@@ -23,6 +23,7 @@ use pixquare::utility_type::LayerVisibility;
 
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState},
+  event::PixquareFileInitializedEvent,
   loader::PxArtwork,
 };
 
@@ -265,6 +266,7 @@ fn initialize_pending_px_files(
     px_state.animation_timer = None;
 
     commands.entity(entity).remove::<PendingPxInitialization>();
+    commands.trigger(PixquareFileInitializedEvent(entity));
   }
 }
 
