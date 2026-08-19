@@ -80,6 +80,7 @@ impl PxTag {
 
 #[derive(Debug, Component)]
 struct PxState {
+  pub artwork_id: Option<bevy::asset::AssetId<PxArtwork>>,
   pub frame_index: u16,
   pub current_direction: AnimationDirection,
   pub temporary_direction: AnimationDirection,
@@ -91,6 +92,7 @@ struct PxState {
 impl Default for PxState {
   fn default() -> Self {
     Self {
+      artwork_id: None,
       frame_index: 0,
       current_direction: AnimationDirection::Forward,
       temporary_direction: AnimationDirection::Forward,
@@ -173,11 +175,14 @@ impl PxArtwork {
 fn render<T: RenderPx + Component<Mutability = Mutable>>(
   mut q_px: Query<
     (&mut T, Ref<PixquareFile>, &PxState),
-    Or<(
-      Changed<PixquareFile>,
-      AssetChanged<PixquareFile>,
-      Changed<PxState>,
-    )>,
+    (
+      Or<(
+        Changed<PixquareFile>,
+        AssetChanged<PixquareFile>,
+        Changed<PxState>,
+      )>,
+      Without<PendingPxInitialization>,
+    ),
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
   mut images: ResMut<Assets<Image>>,
@@ -253,6 +258,7 @@ fn initialize_pending_px_files(
 
     px_state.current_direction = current_direction;
     px_state.temporary_direction = initial_direction;
+    px_state.artwork_id = Some(px_file.artwork.id());
     px_state.frame_index =
       artwork.get_initial_frame_index(&px_state.current_tag, initial_direction);
     px_state.loop_count = 0;
@@ -264,10 +270,12 @@ fn initialize_pending_px_files(
 
 fn mark_changed_px_files_as_pending(
   mut commands: Commands,
-  query: Query<Entity, Changed<PixquareFile>>,
+  query: Query<(Entity, &PixquareFile, &PxState), Changed<PixquareFile>>,
 ) {
-  for entity in &query {
-    commands.entity(entity).insert(PendingPxInitialization);
+  for (entity, px_file, px_state) in &query {
+    if px_state.artwork_id != Some(px_file.artwork.id()) {
+      commands.entity(entity).insert(PendingPxInitialization);
+    }
   }
 }
 
@@ -504,9 +512,10 @@ impl Plugin for PixquareRendererPlugin {
       (
         (
           (
-            initialize_pending_px_files,
             mark_changed_px_files_as_pending,
-          ),
+            initialize_pending_px_files,
+          )
+            .chain(),
           (
             detect_added_or_updated_tag_component,
             detect_removed_tag_component,
@@ -658,6 +667,98 @@ mod tests {
       .get_mut::<PxState>()
       .unwrap()
       .loop_count = loop_count;
+  }
+
+  #[test]
+  fn test_does_not_render_while_initialization_is_pending() {
+    let mut app = App::new();
+    app
+      .insert_resource(Assets::<PxArtwork>::default())
+      .insert_resource(Assets::<Image>::default())
+      .add_systems(PostUpdate, render::<Sprite>);
+
+    let file_data = std::fs::read("assets/orange.px").unwrap();
+    let artwork = PxArtwork(Artwork::read(&file_data).unwrap());
+    let artwork_handle = app
+      .world_mut()
+      .resource_mut::<Assets<PxArtwork>>()
+      .add(artwork);
+    let entity = app
+      .world_mut()
+      .spawn((
+        PixquareFile {
+          artwork: artwork_handle,
+          ..Default::default()
+        },
+        Sprite::default(),
+      ))
+      .id();
+
+    app.update();
+
+    assert_eq!(
+      app.world().entity(entity).get::<Sprite>().unwrap().image,
+      Handle::<Image>::default()
+    );
+  }
+
+  #[test]
+  fn test_does_not_reinitialize_when_layer_visibility_changes() {
+    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+    app.update();
+
+    set_frame_index(&mut app, entity, 3);
+    set_loop_count(&mut app, entity, 7);
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PixquareFile>()
+      .unwrap()
+      .layer_visibility = LayerVisibility::All;
+
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert_eq!(state.frame_index, 3);
+    assert_eq!(state.loop_count, 7);
+    assert!(
+      !app
+        .world()
+        .entity(entity)
+        .contains::<PendingPxInitialization>()
+    );
+  }
+
+  #[test]
+  fn test_reinitializes_after_artwork_handle_changes() {
+    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+    app.update();
+    set_frame_index(&mut app, entity, 3);
+
+    let file_data = std::fs::read("assets/balloon.px").unwrap();
+    let artwork = PxArtwork(Artwork::read(&file_data).unwrap());
+    let artwork_handle = app
+      .world_mut()
+      .resource_mut::<Assets<PxArtwork>>()
+      .add(artwork);
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PixquareFile>()
+      .unwrap()
+      .artwork = artwork_handle.clone();
+
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert_eq!(state.artwork_id, Some(artwork_handle.id()));
+    assert_eq!(state.frame_index, 0);
+    assert!(
+      !app
+        .world()
+        .entity(entity)
+        .contains::<PendingPxInitialization>()
+    );
   }
 
   #[test]
