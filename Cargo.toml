@@ -5,7 +5,14 @@ edition = "2024"
 authors = ["kudohamu"]
 
 [dependencies]
-bevy = { version = "0.18", default-features = false }
+bevy = { version = "0.18", default-features = false, features = [
+  "bevy_asset",
+  "bevy_image",
+  "bevy_log",
+  "bevy_render",
+  "bevy_sprite",
+  "bevy_sprite_render",
+] }
 pixquare-io = { path = "../pixquare-io" }
 
 [dev-dependencies]
