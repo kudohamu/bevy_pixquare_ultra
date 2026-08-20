@@ -5,3 +5,6 @@ pub struct PixquareFileInitializedEvent(pub Entity);
 
 #[derive(Debug, Event)]
 pub struct AnimationLoopFinishedEvent(pub Entity);
+
+#[derive(Debug, Event)]
+pub struct AdvanceAnimationFrameEvent(pub Entity);

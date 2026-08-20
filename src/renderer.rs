@@ -7,6 +7,7 @@ use bevy::{
     component::{Component, Mutable},
     entity::Entity,
     lifecycle::RemovedComponents,
+    observer::On,
     query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut},
@@ -23,7 +24,7 @@ use pixquare::utility_type::LayerVisibility;
 
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState},
-  event::{AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
+  event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
   loader::PxArtwork,
 };
 
@@ -532,38 +533,74 @@ fn update_frame_index(
     timer.tick(time.delta());
 
     if timer.just_finished() {
-      if frame_animation.loop_count != 0 {
-        if px_state.loop_count >= frame_animation.loop_count {
-          frame_animation.play_state = AnimationPlayState::Paused;
-          commands.trigger(AnimationLoopFinishedEvent(entity));
-          continue;
-        }
-        if px_state.frame_index as usize >= artwork.0.frames_len() - 1 {
-          px_state.loop_count += 1;
-        }
-      }
+      let is_loop_finished = advance_animation_frame(artwork, &mut frame_animation, &mut px_state);
 
-      let next_frame_index = px_state.next_frame(&artwork);
-      px_state.frame_index = next_frame_index;
-      px_state.animation_timer = None;
-
-      if px_state.current_direction == AnimationDirection::PingPong {
-        let range = artwork.get_tag_range(&px_state.current_tag);
-
-        if px_state.temporary_direction == AnimationDirection::Forward
-          && px_state.frame_index >= range.end - 1
-        {
-          px_state.temporary_direction = AnimationDirection::Backward;
-        }
-
-        if px_state.temporary_direction == AnimationDirection::Backward
-          && px_state.frame_index == range.start
-        {
-          px_state.temporary_direction = AnimationDirection::Forward;
-        }
+      if is_loop_finished {
+        commands.trigger(AnimationLoopFinishedEvent(entity));
       }
     }
   }
+}
+
+fn handle_advance_animation_frame_event(
+  trigger: On<AdvanceAnimationFrameEvent>,
+  mut commands: Commands,
+  mut q_px: Query<
+    (Entity, &PixquareFile, &mut PxFrameAnimation, &mut PxState),
+    Without<PendingPxInitialization>,
+  >,
+  res_pxartworks: Res<Assets<PxArtwork>>,
+) {
+  let Ok((entity, px_file, mut frame_animation, mut px_state)) = q_px.get_mut(trigger.0) else {
+    return;
+  };
+  let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+    return;
+  };
+
+  let is_loop_finished = advance_animation_frame(artwork, &mut frame_animation, &mut px_state);
+
+  if is_loop_finished {
+    commands.trigger(AnimationLoopFinishedEvent(entity));
+  }
+}
+
+fn advance_animation_frame(
+  artwork: &PxArtwork,
+  frame_animation: &mut PxFrameAnimation,
+  px_state: &mut PxState,
+) -> bool {
+  if frame_animation.loop_count != 0 {
+    if px_state.loop_count >= frame_animation.loop_count {
+      frame_animation.play_state = AnimationPlayState::Paused;
+      return true;
+    }
+    if px_state.frame_index as usize >= artwork.0.frames_len() - 1 {
+      px_state.loop_count += 1;
+    }
+  }
+
+  let next_frame_index = px_state.next_frame(&artwork);
+  px_state.frame_index = next_frame_index;
+  px_state.animation_timer = None;
+
+  if px_state.current_direction == AnimationDirection::PingPong {
+    let range = artwork.get_tag_range(&px_state.current_tag);
+
+    if px_state.temporary_direction == AnimationDirection::Forward
+      && px_state.frame_index >= range.end - 1
+    {
+      px_state.temporary_direction = AnimationDirection::Backward;
+    }
+
+    if px_state.temporary_direction == AnimationDirection::Backward
+      && px_state.frame_index == range.start
+    {
+      px_state.temporary_direction = AnimationDirection::Forward;
+    }
+  }
+
+  return false;
 }
 
 #[derive(Debug)]
@@ -571,32 +608,34 @@ pub struct PixquareRendererPlugin;
 
 impl Plugin for PixquareRendererPlugin {
   fn build(&self, app: &mut bevy::app::App) {
-    app.add_systems(
-      PostUpdate,
-      (
+    app
+      .add_systems(
+        PostUpdate,
         (
           (
-            mark_changed_px_files_as_pending,
-            initialize_pending_px_files,
+            (
+              mark_changed_px_files_as_pending,
+              initialize_pending_px_files,
+            )
+              .chain(),
+            (
+              detect_added_or_updated_tag_component,
+              detect_removed_tag_component,
+              detect_added_animation_component,
+              detect_removed_animation_component,
+              detect_updated_frame_animation_component,
+            ),
           )
             .chain(),
-          (
-            detect_added_or_updated_tag_component,
-            detect_removed_tag_component,
-            detect_added_animation_component,
-            detect_removed_animation_component,
-            detect_updated_frame_animation_component,
-          ),
+          mark_asset_changed_px_images_as_dirty,
+          generate_image,
+          (apply_image::<Sprite>, apply_image::<ImageNode>),
+          update_frame_index,
+          cleanup_removed_px_files,
         )
           .chain(),
-        mark_asset_changed_px_images_as_dirty,
-        generate_image,
-        (apply_image::<Sprite>, apply_image::<ImageNode>),
-        update_frame_index,
-        cleanup_removed_px_files,
       )
-        .chain(),
-    );
+      .add_observer(handle_advance_animation_frame_event);
   }
 }
 
