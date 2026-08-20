@@ -23,7 +23,7 @@ use pixquare::utility_type::LayerVisibility;
 
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState},
-  event::PixquareFileInitializedEvent,
+  event::{AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
   loader::PxArtwork,
 };
 
@@ -334,7 +334,7 @@ fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
   mut extra: <T as RenderPx>::Extra<'_>,
 ) {
   for (mut target, rendered_image) in &mut q_px {
-    let Some(image) = rendered_image.image.as_ref() else {
+    let Some(image) = &rendered_image.image else {
       continue;
     };
 
@@ -414,7 +414,6 @@ fn detect_updated_frame_animation_component(
       px_state.current_direction = frame_animation.direction;
       px_state.temporary_direction = initial_direction;
       px_state.loop_count = 0;
-
       px_state.frame_index =
         artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
     }
@@ -504,14 +503,15 @@ fn detect_removed_tag_component(
 }
 
 fn update_frame_index(
+  mut commands: Commands,
   q_px: Query<
-    (&PixquareFile, &mut PxFrameAnimation, &mut PxState),
+    (Entity, &PixquareFile, &mut PxFrameAnimation, &mut PxState),
     Without<PendingPxInitialization>,
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
   time: Res<Time>,
 ) {
-  for (px_file, mut frame_animation, mut px_state) in q_px {
+  for (entity, px_file, mut frame_animation, mut px_state) in q_px {
     if frame_animation.play_state == AnimationPlayState::Paused {
       continue;
     }
@@ -535,6 +535,7 @@ fn update_frame_index(
       if frame_animation.loop_count != 0 {
         if px_state.loop_count >= frame_animation.loop_count {
           frame_animation.play_state = AnimationPlayState::Paused;
+          commands.trigger(AnimationLoopFinishedEvent(entity));
           continue;
         }
         if px_state.frame_index as usize >= artwork.0.frames_len() - 1 {
@@ -606,7 +607,7 @@ mod tests {
   use bevy::{
     app::App,
     asset::Assets,
-    ecs::{component::Component, entity::Entity},
+    ecs::{component::Component, entity::Entity, observer::On, resource::Resource},
     image::Image,
     math::Rect,
     sprite::Sprite,
@@ -900,7 +901,6 @@ mod tests {
         loop_count: 0,
         ..Default::default()
       });
-
     app.update();
 
     assert_eq!(get_px_state(&app, entity).frame_index, 1);
@@ -924,7 +924,6 @@ mod tests {
         loop_count: 0,
         ..Default::default()
       });
-
     app.update();
 
     app
@@ -933,7 +932,6 @@ mod tests {
       .get_mut::<PxState>()
       .unwrap()
       .frame_index = frames_len - 2;
-
     app.update();
 
     let state = app.world().entity(entity).get::<PxState>().unwrap();
@@ -1359,5 +1357,71 @@ mod tests {
     app.update();
 
     assert_eq!(get_px_state(&app, entity).frame_index, 0);
+  }
+
+  #[derive(Resource, Default)]
+  struct ObservedAnimationLoopFinishedEvents(Vec<Entity>);
+
+  fn observe_animation_loop_finished_event(
+    event: On<AnimationLoopFinishedEvent>,
+    mut observed_events: ResMut<ObservedAnimationLoopFinishedEvents>,
+  ) {
+    observed_events.0.push(event.0);
+  }
+
+  #[test]
+  fn test_triggers_animation_loop_finished_event_once_when_loop_count_is_reached() {
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: FRAME_DURATION.as_secs_f32(),
+      loop_count: 1,
+      ..default()
+    });
+
+    app.update();
+    let last_frame_index = get_artwork(&app, entity).frames_len() as u16 - 1;
+    set_frame_index(&mut app, entity, last_frame_index);
+    set_loop_count(&mut app, entity, 0);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 0);
+    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0
+        .is_empty()
+    );
+
+    app.update();
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Paused
+    );
+
+    app.update();
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
   }
 }
