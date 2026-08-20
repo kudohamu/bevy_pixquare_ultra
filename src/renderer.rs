@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use bevy::{
   app::{Plugin, PostUpdate},
-  asset::{AsAssetId, Assets, Handle, RenderAssetUsages},
+  asset::{AsAssetId, AssetId, Assets, Handle, RenderAssetUsages},
   ecs::{
     component::{Component, Mutable},
     entity::Entity,
@@ -10,7 +10,6 @@ use bevy::{
     query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut},
-    world::Ref,
   },
   image::{Image, ImageSampler},
   log::{error, warn},
@@ -18,6 +17,7 @@ use bevy::{
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
   time::{Time, Timer, TimerMode},
+  ui::widget::ImageNode,
 };
 use pixquare::utility_type::LayerVisibility;
 
@@ -28,7 +28,7 @@ use crate::{
 };
 
 #[derive(Debug, Component)]
-#[require(PxState, PendingPxInitialization)]
+#[require(PxState, PendingPxInitialization, PxRenderedImageCache)]
 pub struct PixquareFile {
   pub artwork: Handle<PxArtwork>,
   pub layer_visibility: LayerVisibility,
@@ -126,6 +126,20 @@ impl PxState {
 #[derive(Component, Default)]
 struct PendingPxInitialization;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PxRenderedImageKey {
+  artwork_id: AssetId<PxArtwork>,
+  frame_index: u16,
+  layer_visibility: LayerVisibility,
+}
+
+#[derive(Component, Default)]
+struct PxRenderedImageCache {
+  image: Option<Handle<Image>>,
+  key: Option<PxRenderedImageKey>,
+  dirty: bool,
+}
+
 trait RenderPx {
   type Extra<'e>;
 
@@ -133,6 +147,14 @@ trait RenderPx {
 }
 
 impl RenderPx for Sprite {
+  type Extra<'e> = ();
+
+  fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
+    self.image = texture;
+  }
+}
+
+impl RenderPx for ImageNode {
   type Extra<'e> = ();
 
   fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
@@ -170,55 +192,6 @@ impl PxArtwork {
 
   fn is_valid_tag(&self, tag: &str) -> bool {
     self.0.tags.iter().position(|t| t.name == tag).is_some()
-  }
-}
-
-fn render<T: RenderPx + Component<Mutability = Mutable>>(
-  mut q_px: Query<
-    (&mut T, Ref<PixquareFile>, &PxState),
-    (
-      Or<(
-        Changed<PixquareFile>,
-        AssetChanged<PixquareFile>,
-        Changed<PxState>,
-      )>,
-      Without<PendingPxInitialization>,
-    ),
-  >,
-  res_pxartworks: Res<Assets<PxArtwork>>,
-  mut images: ResMut<Assets<Image>>,
-  mut extra: <T as RenderPx>::Extra<'_>,
-) {
-  for (mut target, px_file, px_state) in q_px.iter_mut() {
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
-      continue;
-    };
-
-    match artwork
-      .0
-      .get_frame_image(px_state.frame_index as usize, px_file.layer_visibility)
-    {
-      Ok(image_buf) => {
-        let mut image = Image::new(
-          Extent3d {
-            width: artwork.0.canvas_size.width,
-            height: artwork.0.canvas_size.height,
-            depth_or_array_layers: 1,
-          },
-          TextureDimension::D2,
-          image_buf,
-          TextureFormat::Rgba8UnormSrgb,
-          RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-        );
-        image.sampler = ImageSampler::nearest();
-
-        let texture_handle = images.add(image);
-        target.render_px(texture_handle, &mut extra);
-      }
-      Err(err) => {
-        error!("{}", err);
-      }
-    }
   }
 }
 
@@ -278,6 +251,94 @@ fn mark_changed_px_files_as_pending(
     if px_state.artwork_id != Some(px_file.artwork.id()) {
       commands.entity(entity).insert(PendingPxInitialization);
     }
+  }
+}
+
+fn mark_asset_changed_px_images_as_dirty(
+  mut q_px: Query<&mut PxRenderedImageCache, AssetChanged<PixquareFile>>,
+) {
+  for mut rendered_image in &mut q_px {
+    rendered_image.dirty = true;
+  }
+}
+
+fn cleanup_removed_px_files(mut commands: Commands, mut removed: RemovedComponents<PixquareFile>) {
+  for entity in removed.read() {
+    let Ok(mut entity_commands) = commands.get_entity(entity) else {
+      continue;
+    };
+    entity_commands.remove::<PxRenderedImageCache>();
+  }
+}
+
+fn generate_image(
+  mut q_px: Query<
+    (&PixquareFile, &PxState, &mut PxRenderedImageCache),
+    Without<PendingPxInitialization>,
+  >,
+  res_pxartworks: Res<Assets<PxArtwork>>,
+  mut images: ResMut<Assets<Image>>,
+) {
+  for (px_file, px_state, mut rendered_image) in &mut q_px {
+    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+      continue;
+    };
+
+    let key = PxRenderedImageKey {
+      artwork_id: px_file.artwork.id(),
+      frame_index: px_state.frame_index,
+      layer_visibility: px_file.layer_visibility,
+    };
+    if !rendered_image.dirty && rendered_image.key == Some(key) {
+      continue;
+    }
+
+    match artwork
+      .0
+      .get_frame_image(px_state.frame_index as usize, px_file.layer_visibility)
+    {
+      Ok(image_buf) => {
+        let mut image = Image::new(
+          Extent3d {
+            width: artwork.0.canvas_size.width,
+            height: artwork.0.canvas_size.height,
+            depth_or_array_layers: 1,
+          },
+          TextureDimension::D2,
+          image_buf,
+          TextureFormat::Rgba8UnormSrgb,
+          RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        );
+        image.sampler = ImageSampler::nearest();
+
+        let texture_handle = images.add(image);
+        rendered_image.image = Some(texture_handle);
+        rendered_image.key = Some(key);
+        rendered_image.dirty = false;
+      }
+      Err(err) => {
+        error!("{}", err);
+      }
+    }
+  }
+}
+
+fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
+  mut q_px: Query<
+    (&mut T, &PxRenderedImageCache),
+    (
+      Or<(Added<T>, Changed<PxRenderedImageCache>)>,
+      Without<PendingPxInitialization>,
+    ),
+  >,
+  mut extra: <T as RenderPx>::Extra<'_>,
+) {
+  for (mut target, rendered_image) in &mut q_px {
+    let Some(image) = rendered_image.image.as_ref() else {
+      continue;
+    };
+
+    target.render_px(image.clone(), &mut extra);
   }
 }
 
@@ -527,7 +588,11 @@ impl Plugin for PixquareRendererPlugin {
           ),
         )
           .chain(),
-        (render::<Sprite>, update_frame_index),
+        mark_asset_changed_px_images_as_dirty,
+        generate_image,
+        (apply_image::<Sprite>, apply_image::<ImageNode>),
+        update_frame_index,
+        cleanup_removed_px_files,
       )
         .chain(),
     );
@@ -541,10 +606,12 @@ mod tests {
   use bevy::{
     app::App,
     asset::Assets,
-    ecs::entity::Entity,
+    ecs::{component::Component, entity::Entity},
     image::Image,
+    math::Rect,
     sprite::Sprite,
     time::{TimePlugin, TimeUpdateStrategy},
+    ui::widget::{ImageNode, NodeImageMode},
     utils::default,
   };
   use pixquare::model::Artwork;
@@ -555,6 +622,10 @@ mod tests {
   const TIME_STEP: Duration = Duration::from_millis(101);
 
   fn create_px_file_app(path: &str) -> (App, Entity) {
+    create_px_file_app_with_target::<Sprite>(path)
+  }
+
+  fn create_px_file_app_with_target<T: Component + Default>(path: &str) -> (App, Entity) {
     let mut app = App::new();
     app
       .add_plugins((TimePlugin, PixquareRendererPlugin))
@@ -579,7 +650,7 @@ mod tests {
           artwork,
           ..Default::default()
         },
-        Sprite::default(),
+        T::default(),
       ))
       .id();
 
@@ -677,7 +748,7 @@ mod tests {
     app
       .insert_resource(Assets::<PxArtwork>::default())
       .insert_resource(Assets::<Image>::default())
-      .add_systems(PostUpdate, render::<Sprite>);
+      .add_systems(PostUpdate, (generate_image, apply_image::<Sprite>).chain());
 
     let file_data = std::fs::read("assets/orange.px").unwrap();
     let artwork = PxArtwork(Artwork::read(&file_data).unwrap());
@@ -761,6 +832,59 @@ mod tests {
         .entity(entity)
         .contains::<PendingPxInitialization>()
     );
+  }
+
+  #[test]
+  fn test_renders_to_image_node_and_preserves_its_display_properties() {
+    let (mut app, entity) = create_px_file_app_with_target::<ImageNode>("assets/orange.px");
+    let rect = Rect::new(1., 2., 9., 10.);
+    let initial_image = {
+      let mut entity_mut = app.world_mut().entity_mut(entity);
+      let mut image_node = entity_mut.get_mut::<ImageNode>().unwrap();
+      image_node.rect = Some(rect);
+      image_node.image_mode = NodeImageMode::Stretch;
+      image_node.image.clone()
+    };
+
+    app.update();
+
+    let image_node = app.world().entity(entity).get::<ImageNode>().unwrap();
+    assert_ne!(image_node.image, initial_image);
+    assert_eq!(image_node.rect, Some(rect));
+    assert_eq!(image_node.image_mode, NodeImageMode::Stretch);
+
+    let first_rendered_image = image_node.image.clone();
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PixquareFile>()
+      .unwrap()
+      .layer_visibility = LayerVisibility::All;
+    app.update();
+
+    let image_node = app.world().entity(entity).get::<ImageNode>().unwrap();
+    assert_ne!(image_node.image, first_rendered_image);
+    assert_eq!(image_node.rect, Some(rect));
+    assert_eq!(image_node.image_mode, NodeImageMode::Stretch);
+  }
+
+  #[test]
+  fn test_renders_to_image_node_added_after_initialization() {
+    let (mut app, entity) = create_px_file_app_with_target::<ImageNode>("assets/orange.px");
+    app.world_mut().entity_mut(entity).remove::<ImageNode>();
+
+    app.update();
+
+    let initial_image = ImageNode::default().image;
+    app.world_mut().entity_mut(entity).insert(ImageNode {
+      image_mode: NodeImageMode::Stretch,
+      ..default()
+    });
+    app.update();
+
+    let image_node = app.world().entity(entity).get::<ImageNode>().unwrap();
+    assert_ne!(image_node.image, initial_image);
+    assert_eq!(image_node.image_mode, NodeImageMode::Stretch);
   }
 
   #[test]
