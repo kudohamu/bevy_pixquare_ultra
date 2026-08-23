@@ -23,6 +23,9 @@ use bevy::{
 };
 use pixquare::utility_type::LayerVisibility;
 
+#[cfg(feature = "3d")]
+use bevy::pbr::{Material, MeshMaterial3d};
+
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState},
   event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
@@ -177,6 +180,22 @@ impl RenderPx for ImageNode {
 }
 
 impl<M: Material2d + RenderPx> RenderPx for MeshMaterial2d<M> {
+  type Param = (ResMut<'static, Assets<M>>, <M as RenderPx>::Param);
+
+  fn render_px(
+    &mut self,
+    texture: Handle<Image>,
+    param: &mut SystemParamItem<'_, '_, Self::Param>,
+  ) {
+    let Some(material) = param.0.get_mut(&*self) else {
+      return;
+    };
+    material.render_px(texture, &mut param.1);
+  }
+}
+
+#[cfg(feature = "3d")]
+impl<M: Material + RenderPx> RenderPx for MeshMaterial3d<M> {
   type Param = (ResMut<'static, Assets<M>>, <M as RenderPx>::Param);
 
   fn render_px(

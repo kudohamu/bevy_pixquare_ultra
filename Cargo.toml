@@ -22,3 +22,11 @@ bevy = { version = "0.18", features = [
   "bevy_window"
 ] }
 bevy_asset_loader = "0.26.0"
+
+[features]
+3d = ["bevy/bevy_pbr"]
+
+[[example]]
+name = "material3d"
+path = "examples/material3d.rs"
+required-features = ["3d"]
