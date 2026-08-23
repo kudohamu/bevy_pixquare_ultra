@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use bevy::{
-  app::{Plugin, PostUpdate},
+  app::{App, Plugin, PostUpdate},
   asset::{AsAssetId, AssetId, Assets, Handle, RenderAssetUsages},
   ecs::{
     component::{Component, Mutable},
@@ -10,13 +10,14 @@ use bevy::{
     observer::On,
     query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
-    system::{Commands, Query, Res, ResMut},
+    system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
   },
   image::{Image, ImageSampler},
   log::{error, warn},
   prelude::AssetChanged,
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
+  sprite_render::{Material2d, MeshMaterial2d},
   time::{Time, Timer, TimerMode},
   ui::widget::ImageNode,
 };
@@ -141,25 +142,74 @@ struct PxRenderedImageCache {
   dirty: bool,
 }
 
-trait RenderPx {
-  type Extra<'e>;
+pub trait RenderPx {
+  type Param: SystemParam + 'static;
 
-  fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>);
+  fn render_px(
+    &mut self,
+    texture: Handle<Image>,
+    _param: &mut SystemParamItem<'_, '_, Self::Param>,
+  );
 }
 
 impl RenderPx for Sprite {
-  type Extra<'e> = ();
+  type Param = ();
 
-  fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
+  fn render_px(
+    &mut self,
+    texture: Handle<Image>,
+    _param: &mut SystemParamItem<'_, '_, Self::Param>,
+  ) {
     self.image = texture;
   }
 }
 
 impl RenderPx for ImageNode {
-  type Extra<'e> = ();
+  type Param = ();
 
-  fn render_px(&mut self, texture: Handle<Image>, _extra: &mut Self::Extra<'_>) {
+  fn render_px(
+    &mut self,
+    texture: Handle<Image>,
+    _param: &mut SystemParamItem<'_, '_, Self::Param>,
+  ) {
     self.image = texture;
+  }
+}
+
+impl<M: Material2d + RenderPx> RenderPx for MeshMaterial2d<M> {
+  type Param = (ResMut<'static, Assets<M>>, <M as RenderPx>::Param);
+
+  fn render_px(
+    &mut self,
+    texture: Handle<Image>,
+    param: &mut SystemParamItem<'_, '_, Self::Param>,
+  ) {
+    let Some(material) = param.0.get_mut(&*self) else {
+      return;
+    };
+    material.render_px(texture, &mut param.1);
+  }
+}
+
+/// Extension methods for registering custom Pixquare render targets.
+pub trait PxRenderAppExt {
+  /// Registers a component implementing [`RenderPx`] as a render target.
+  fn register_px_render_target<T>(&mut self) -> &mut Self
+  where
+    T: RenderPx + Component<Mutability = Mutable>;
+}
+
+impl PxRenderAppExt for App {
+  fn register_px_render_target<T>(&mut self) -> &mut Self
+  where
+    T: RenderPx + Component<Mutability = Mutable>,
+  {
+    self.add_systems(
+      PostUpdate,
+      apply_image::<T>
+        .after(generate_image)
+        .before(update_frame_index),
+    )
   }
 }
 
@@ -332,14 +382,14 @@ fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
       Without<PendingPxInitialization>,
     ),
   >,
-  mut extra: <T as RenderPx>::Extra<'_>,
+  mut param: StaticSystemParam<T::Param>,
 ) {
   for (mut target, rendered_image) in &mut q_px {
     let Some(image) = &rendered_image.image else {
       continue;
     };
 
-    target.render_px(image.clone(), &mut extra);
+    target.render_px(image.clone(), &mut param);
   }
 }
 
