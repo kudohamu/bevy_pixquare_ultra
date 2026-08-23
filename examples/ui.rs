@@ -1,6 +1,5 @@
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{PixquareUltraPlugin, renderer::PixquareFile};
-use pixquare::utility_type::LayerVisibility;
 
 fn main() {
   App::new()
@@ -47,7 +46,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
         children![(
           PixquareFile {
             artwork: server.load("orange.px"),
-            layer_visibility: LayerVisibility::Visible,
             ..default()
           },
           ImageNode::default(),

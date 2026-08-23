@@ -1,6 +1,5 @@
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{PixquareUltraPlugin, renderer::PixquareFile};
-use pixquare::utility_type::LayerVisibility;
 
 fn main() {
   App::new()
@@ -32,7 +31,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
   commands.spawn((
     PixquareFile {
       artwork: server.load("signboard.px"),
-      layer_visibility: LayerVisibility::Visible,
       ..default()
     },
     Sprite {

@@ -21,13 +21,12 @@ use bevy::{
   time::{Time, Timer, TimerMode},
   ui::widget::ImageNode,
 };
-use pixquare::utility_type::LayerVisibility;
 
 #[cfg(feature = "3d")]
 use bevy::pbr::{Material, MeshMaterial3d};
 
 use crate::{
-  data_type::{AnimationDirection, AnimationPlayState},
+  data_type::{AnimationDirection, AnimationPlayState, LayerVisibility},
   event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
   loader::PxArtwork,
 };
@@ -363,10 +362,10 @@ fn generate_image(
       continue;
     }
 
-    match artwork
-      .0
-      .get_frame_image(px_state.frame_index as usize, px_file.layer_visibility)
-    {
+    match artwork.0.get_frame_image(
+      px_state.frame_index as usize,
+      px_file.layer_visibility.into(),
+    ) {
       Ok(image_buf) => {
         let mut image = Image::new(
           Extent3d {

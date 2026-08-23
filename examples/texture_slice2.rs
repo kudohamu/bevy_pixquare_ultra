@@ -2,7 +2,6 @@ use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{
   PixquareUltraPlugin, event::PixquareFileInitializedEvent, renderer::PixquareFile,
 };
-use pixquare::utility_type::LayerVisibility;
 
 /// If you want to avoid the following error log that appears before the .px file is applied to the Sprite,
 /// you can also observe the Pixquare file initialization event triggered by bevy_pixquare_ultra.
@@ -34,7 +33,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
   commands.spawn((
     PixquareFile {
       artwork: server.load("signboard.px"),
-      layer_visibility: LayerVisibility::Visible,
       ..default()
     },
     Sprite {

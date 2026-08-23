@@ -5,7 +5,6 @@ use bevy_pixquare_ultra::{
   event::AdvanceAnimationFrameEvent,
   renderer::{PixquareFile, PxFrameAnimation},
 };
-use pixquare::utility_type::LayerVisibility;
 
 fn main() {
   App::new()
@@ -31,7 +30,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
   commands.spawn((
     PixquareFile {
       artwork: server.load("balloon.px"),
-      layer_visibility: LayerVisibility::Visible,
       ..default()
     },
     PxFrameAnimation {

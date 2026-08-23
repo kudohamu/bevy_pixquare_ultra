@@ -10,7 +10,6 @@ use bevy_pixquare_ultra::{
   PixquareUltraPlugin,
   renderer::{PixquareFile, PxFrameAnimation, PxRenderAppExt, RenderPx},
 };
-use pixquare::utility_type::LayerVisibility;
 
 const SHADER_ASSET_PATH: &str = "shaders/pixquare_material.wgsl";
 
@@ -71,7 +70,6 @@ fn setup(
   commands.spawn((
     PixquareFile {
       artwork: asset_server.load("balloon.px"),
-      layer_visibility: LayerVisibility::Visible,
       ..default()
     },
     PxFrameAnimation::default(),

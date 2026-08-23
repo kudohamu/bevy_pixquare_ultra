@@ -8,9 +8,9 @@ use bevy::{
 };
 use bevy_pixquare_ultra::{
   PixquareUltraPlugin,
+  data_type::LayerVisibility,
   renderer::{PixquareFile, PxFrameAnimation, PxRenderAppExt, RenderPx},
 };
-use pixquare::utility_type::LayerVisibility;
 
 const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wgsl";
 
