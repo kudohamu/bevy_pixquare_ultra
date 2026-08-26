@@ -35,3 +35,12 @@ impl From<LayerVisibility> for pixquare::utility_type::LayerVisibility {
     }
   }
 }
+
+impl std::fmt::Display for LayerVisibility {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Visible => write!(f, "visible"),
+      Self::All => write!(f, "all"),
+    }
+  }
+}

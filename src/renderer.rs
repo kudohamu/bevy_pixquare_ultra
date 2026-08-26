@@ -329,9 +329,10 @@ fn generate_image(
       artwork.frame_image(px_state.frame_index as usize, px_file.layer_visibility)
     else {
       error!(
-        "could not find frame image(artwork_id: {}, frame_index: {})",
+        "could not find frame image(artwork_id: {}, frame_index: {}, visibility: {})",
         px_file.artwork.id(),
-        px_state.frame_index
+        px_state.frame_index,
+        px_file.layer_visibility
       );
       continue;
     };
