@@ -1,8 +1,6 @@
-use std::ops::Range;
-
 use bevy::{
   app::{App, Plugin, PostUpdate},
-  asset::{AsAssetId, AssetId, Assets, Handle, RenderAssetUsages},
+  asset::{AsAssetId, AssetId, Assets, Handle},
   ecs::{
     component::{Component, Mutable},
     entity::Entity,
@@ -12,10 +10,9 @@ use bevy::{
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
   },
-  image::{Image, ImageSampler},
-  log::{error, warn},
+  image::Image,
+  log::error,
   prelude::AssetChanged,
-  render::render_resource::{Extent3d, TextureDimension, TextureFormat},
   sprite::Sprite,
   sprite_render::{Material2d, MeshMaterial2d},
   time::{Time, Timer, TimerMode},
@@ -231,39 +228,6 @@ impl PxRenderAppExt for App {
   }
 }
 
-impl PxArtwork {
-  fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
-    match tag {
-      Some(tag) => {
-        let Some(tag) = self.0.tags.iter().find(|t| t.name == *tag) else {
-          warn!("tag: `{}` is not found", tag);
-
-          return 0..self.0.frames_len() as u16;
-        };
-
-        tag.start_index..(tag.end_index + 1)
-      }
-      None => {
-        return 0..self.0.frames_len() as u16;
-      }
-    }
-  }
-
-  fn get_initial_frame_index(&self, tag: &Option<String>, direction: AnimationDirection) -> u16 {
-    let range = self.get_tag_range(tag);
-
-    match direction {
-      AnimationDirection::Forward => range.start,
-      AnimationDirection::Backward => range.end - 1,
-      AnimationDirection::PingPong => range.start,
-    }
-  }
-
-  fn is_valid_tag(&self, tag: &str) -> bool {
-    self.0.tags.iter().position(|t| t.name == tag).is_some()
-  }
-}
-
 fn initialize_pending_px_files(
   mut commands: Commands,
   mut q_px: Query<
@@ -346,7 +310,6 @@ fn generate_image(
     Without<PendingPxInitialization>,
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
-  mut images: ResMut<Assets<Image>>,
 ) {
   for (px_file, px_state, mut rendered_image) in &mut q_px {
     let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
@@ -362,33 +325,19 @@ fn generate_image(
       continue;
     }
 
-    match artwork.0.get_frame_image(
-      px_state.frame_index as usize,
-      px_file.layer_visibility.into(),
-    ) {
-      Ok(image_buf) => {
-        let mut image = Image::new(
-          Extent3d {
-            width: artwork.0.canvas_size.width,
-            height: artwork.0.canvas_size.height,
-            depth_or_array_layers: 1,
-          },
-          TextureDimension::D2,
-          image_buf,
-          TextureFormat::Rgba8UnormSrgb,
-          RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-        );
-        image.sampler = ImageSampler::nearest();
-
-        let texture_handle = images.add(image);
-        rendered_image.image = Some(texture_handle);
-        rendered_image.key = Some(key);
-        rendered_image.dirty = false;
-      }
-      Err(err) => {
-        error!("{}", err);
-      }
-    }
+    let Some(frame_image) =
+      artwork.frame_image(px_state.frame_index as usize, px_file.layer_visibility)
+    else {
+      error!(
+        "could not find frame image(artwork_id: {}, frame_index: {})",
+        px_file.artwork.id(),
+        px_state.frame_index
+      );
+      continue;
+    };
+    rendered_image.image = Some(frame_image.clone());
+    rendered_image.key = Some(key);
+    rendered_image.dirty = false;
   }
 }
 
@@ -643,7 +592,7 @@ fn advance_animation_frame(
       frame_animation.play_state = AnimationPlayState::Paused;
       return true;
     }
-    if px_state.frame_index as usize >= artwork.0.frames_len() - 1 {
+    if px_state.frame_index as usize >= artwork.frames.len() - 1 {
       px_state.loop_count += 1;
     }
   }
@@ -733,6 +682,22 @@ mod tests {
     create_px_file_app_with_target::<Sprite>(path)
   }
 
+  fn add_px_artwork(app: &mut App, path: &str) -> Handle<PxArtwork> {
+    let file_data = std::fs::read(path).unwrap();
+    let artwork = Artwork::read(&file_data).unwrap();
+
+    let px_artwork = {
+      let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+
+      PxArtwork::from_artwork(&artwork, |_label, image| images.add(image)).unwrap()
+    };
+
+    app
+      .world_mut()
+      .resource_mut::<Assets<PxArtwork>>()
+      .add(px_artwork)
+  }
+
   fn create_px_file_app_with_target<T: Component + Default>(path: &str) -> (App, Entity) {
     let mut app = App::new();
     app
@@ -743,14 +708,7 @@ mod tests {
 
     app.update();
 
-    let file_data = std::fs::read(path).unwrap();
-    let artwork = Artwork::read(&file_data).unwrap();
-
-    let artwork = app
-      .world_mut()
-      .resource_mut::<Assets<PxArtwork>>()
-      .add(PxArtwork(artwork.clone()));
-
+    let artwork = add_px_artwork(&mut app, path);
     let entity = app
       .world_mut()
       .spawn((
@@ -765,12 +723,12 @@ mod tests {
     (app, entity)
   }
 
-  fn get_artwork(app: &App, entity: Entity) -> &Artwork {
+  fn get_px_artwork(app: &App, entity: Entity) -> &PxArtwork {
     let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
     let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
-    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
+    let px_artwork = &res_pxartwork.get(&px_file.artwork).unwrap();
 
-    return artwork;
+    return px_artwork;
   }
 
   fn get_px_state(app: &App, entity: Entity) -> &PxState {
@@ -858,12 +816,7 @@ mod tests {
       .insert_resource(Assets::<Image>::default())
       .add_systems(PostUpdate, (generate_image, apply_image::<Sprite>).chain());
 
-    let file_data = std::fs::read("assets/orange.px").unwrap();
-    let artwork = PxArtwork(Artwork::read(&file_data).unwrap());
-    let artwork_handle = app
-      .world_mut()
-      .resource_mut::<Assets<PxArtwork>>()
-      .add(artwork);
+    let artwork_handle = add_px_artwork(&mut app, "assets/orange.px");
     let entity = app
       .world_mut()
       .spawn((
@@ -916,12 +869,7 @@ mod tests {
     app.update();
     set_frame_index(&mut app, entity, 3);
 
-    let file_data = std::fs::read("assets/balloon.px").unwrap();
-    let artwork = PxArtwork(Artwork::read(&file_data).unwrap());
-    let artwork_handle = app
-      .world_mut()
-      .resource_mut::<Assets<PxArtwork>>()
-      .add(artwork);
+    let artwork_handle = add_px_artwork(&mut app, "assets/balloon.px");
     app
       .world_mut()
       .entity_mut(entity)
@@ -1019,8 +967,8 @@ mod tests {
 
     let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
     let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
-    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap().0;
-    let frames_len = artwork.frames_len() as u16;
+    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap();
+    let frames_len = artwork.frames.len() as u16;
 
     app
       .world_mut()
@@ -1099,16 +1047,16 @@ mod tests {
     app.update();
 
     let state = get_px_state(&app, entity);
-    let artwork = get_artwork(&app, entity);
-    assert_eq!(state.frame_index, artwork.frames_len() as u16 - 1);
+    let px_artwork = get_px_artwork(&app, entity);
+    assert_eq!(state.frame_index, px_artwork.frames.len() as u16 - 1);
   }
 
   #[test]
   fn test_reverses_to_backward_at_last_frame_when_direction_is_ping_pong() {
     let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
 
-    let artwork = get_artwork(&app, entity);
-    let frames_len = artwork.frames_len() as u16;
+    let px_artwork = get_px_artwork(&app, entity);
+    let frames_len = px_artwork.frames.len() as u16;
 
     app
       .world_mut()
@@ -1489,7 +1437,7 @@ mod tests {
     });
 
     app.update();
-    let last_frame_index = get_artwork(&app, entity).frames_len() as u16 - 1;
+    let last_frame_index = get_px_artwork(&app, entity).frames.len() as u16 - 1;
     set_frame_index(&mut app, entity, last_frame_index);
     set_loop_count(&mut app, entity, 0);
 

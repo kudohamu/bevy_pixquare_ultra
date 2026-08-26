@@ -3,6 +3,7 @@ use bevy::app::Plugin;
 use crate::{loader::PixquareLoaderPlugin, renderer::PixquareRendererPlugin};
 
 pub mod data_type;
+pub mod error;
 pub mod event;
 pub mod loader;
 pub mod renderer;

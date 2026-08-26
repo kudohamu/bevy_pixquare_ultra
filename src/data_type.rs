@@ -5,6 +5,16 @@ pub enum AnimationDirection {
   PingPong,
 }
 
+impl AnimationDirection {
+  pub(crate) fn from_px_direction(direction: pixquare::composite_type::AnimationDirection) -> Self {
+    match direction {
+      pixquare::composite_type::AnimationDirection::Forward => Self::Forward,
+      pixquare::composite_type::AnimationDirection::Backward => Self::Backward,
+      pixquare::composite_type::AnimationDirection::PingPong => Self::PingPong,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationPlayState {
   Playing,
