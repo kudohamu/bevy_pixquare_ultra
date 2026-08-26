@@ -584,7 +584,7 @@ fn handle_advance_animation_frame_event(
 }
 
 fn advance_animation_frame(
-  artwork: &PxArtwork,
+  px_artwork: &PxArtwork,
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
 ) -> bool {
@@ -593,17 +593,17 @@ fn advance_animation_frame(
       frame_animation.play_state = AnimationPlayState::Paused;
       return true;
     }
-    if px_state.frame_index as usize >= artwork.frames.len() - 1 {
+    if px_state.frame_index as usize >= px_artwork.frame_count() - 1 {
       px_state.loop_count += 1;
     }
   }
 
-  let next_frame_index = px_state.next_frame(&artwork);
+  let next_frame_index = px_state.next_frame(&px_artwork);
   px_state.frame_index = next_frame_index;
   px_state.animation_timer = None;
 
   if px_state.current_direction == AnimationDirection::PingPong {
-    let range = artwork.get_tag_range(&px_state.current_tag);
+    let range = px_artwork.get_tag_range(&px_state.current_tag);
 
     if px_state.temporary_direction == AnimationDirection::Forward
       && px_state.frame_index >= range.end - 1
@@ -968,8 +968,8 @@ mod tests {
 
     let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
     let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
-    let artwork = &res_pxartwork.get(&px_file.artwork).unwrap();
-    let frames_len = artwork.frames.len() as u16;
+    let px_artwork = &res_pxartwork.get(&px_file.artwork).unwrap();
+    let frames_len = px_artwork.frame_count() as u16;
 
     app
       .world_mut()
@@ -1049,7 +1049,7 @@ mod tests {
 
     let state = get_px_state(&app, entity);
     let px_artwork = get_px_artwork(&app, entity);
-    assert_eq!(state.frame_index, px_artwork.frames.len() as u16 - 1);
+    assert_eq!(state.frame_index, px_artwork.frame_count() as u16 - 1);
   }
 
   #[test]
@@ -1057,7 +1057,7 @@ mod tests {
     let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
 
     let px_artwork = get_px_artwork(&app, entity);
-    let frames_len = px_artwork.frames.len() as u16;
+    let frames_len = px_artwork.frame_count() as u16;
 
     app
       .world_mut()
@@ -1438,7 +1438,7 @@ mod tests {
     });
 
     app.update();
-    let last_frame_index = get_px_artwork(&app, entity).frames.len() as u16 - 1;
+    let last_frame_index = get_px_artwork(&app, entity).frame_count() as u16 - 1;
     set_frame_index(&mut app, entity, last_frame_index);
     set_loop_count(&mut app, entity, 0);
 

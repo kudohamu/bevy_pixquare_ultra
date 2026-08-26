@@ -18,13 +18,55 @@ use crate::{
 
 #[derive(Debug, Asset, TypePath)]
 pub struct PxArtwork {
-  pub canvas_size: UVec2,
-  pub(crate) frames: Vec<PxFrameMeta>,
-  pub tags: Vec<PxTagMeta>,
+  canvas_size: UVec2,
+  frames: Vec<PxFrameMeta>,
+  tags: Vec<PxTagMeta>,
 }
 
 impl PxArtwork {
-  pub fn from_artwork(
+  pub fn canvas_size(&self) -> UVec2 {
+    self.canvas_size
+  }
+
+  pub fn frame_count(&self) -> usize {
+    self.frames.len()
+  }
+
+  pub fn tags(&self) -> &[PxTagMeta] {
+    &self.tags
+  }
+
+  pub fn frame_image(
+    &self,
+    frame_index: usize,
+    visibility: LayerVisibility,
+  ) -> Option<&Handle<Image>> {
+    let frame = self.frames.get(frame_index)?;
+
+    match visibility {
+      LayerVisibility::All => Some(&frame.all_layer_image),
+      LayerVisibility::Visible => Some(&frame.visible_layer_image),
+    }
+  }
+
+  pub fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
+    match tag {
+      Some(tag) => {
+        let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
+          warn!("tag: `{}` is not found", tag);
+
+          return 0..self.frames.len() as u16;
+        };
+
+        tag.start_index..(tag.end_index + 1)
+      }
+      None => {
+        return 0..self.frames.len() as u16;
+      }
+    }
+  }
+
+  pub(crate) fn from_artwork(
     artwork: &Artwork,
     mut add_image: impl FnMut(String, Image) -> Handle<Image>,
   ) -> Result<Self, PixquareLoaderError> {
@@ -96,37 +138,7 @@ impl PxArtwork {
     })
   }
 
-  pub fn frame_image(
-    &self,
-    frame_index: usize,
-    visibility: LayerVisibility,
-  ) -> Option<&Handle<Image>> {
-    let frame = self.frames.get(frame_index)?;
-
-    match visibility {
-      LayerVisibility::All => Some(&frame.all_layer_image),
-      LayerVisibility::Visible => Some(&frame.visible_layer_image),
-    }
-  }
-
-  pub fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
-    match tag {
-      Some(tag) => {
-        let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
-          warn!("tag: `{}` is not found", tag);
-
-          return 0..self.frames.len() as u16;
-        };
-
-        tag.start_index..(tag.end_index + 1)
-      }
-      None => {
-        return 0..self.frames.len() as u16;
-      }
-    }
-  }
-
-  pub fn get_initial_frame_index(
+  pub(crate) fn get_initial_frame_index(
     &self,
     tag: &Option<String>,
     direction: AnimationDirection,
@@ -140,7 +152,7 @@ impl PxArtwork {
     }
   }
 
-  pub fn is_valid_tag(&self, tag: &str) -> bool {
+  pub(crate) fn is_valid_tag(&self, tag: &str) -> bool {
     self.tags.iter().position(|t| t.name == tag).is_some()
   }
 }
