@@ -24,6 +24,14 @@ pub struct PxArtwork {
 }
 
 impl PxArtwork {
+  pub(crate) fn new(canvas_size: UVec2, frames: Vec<PxFrameMeta>, tags: Vec<PxTagMeta>) -> Self {
+    Self {
+      canvas_size,
+      frames,
+      tags,
+    }
+  }
+
   pub fn canvas_size(&self) -> UVec2 {
     self.canvas_size
   }
