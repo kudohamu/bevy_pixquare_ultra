@@ -57,6 +57,12 @@ impl PxArtwork {
     }
   }
 
+  pub fn frame_duration(&self, frame_index: usize) -> Option<&Duration> {
+    let frame = self.frames.get(frame_index)?;
+
+    Some(&frame.duration)
+  }
+
   pub fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
     match tag {
       Some(tag) => {
@@ -99,8 +105,10 @@ impl PxArtwork {
             RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
           );
           visible_layer_image.sampler = ImageSampler::nearest();
-          let visible_layer_image =
-            add_image(format!("frame_{frame_index}_visible"), visible_layer_image);
+          let visible_layer_image = add_image(
+            PxFrameMeta::generate_image_label(frame_index, LayerVisibility::Visible),
+            visible_layer_image,
+          );
 
           let all_layer_buf = artwork.get_frame_image(frame_index, LayerVisibility::All.into())?;
 
@@ -116,7 +124,10 @@ impl PxArtwork {
             RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
           );
           all_layer_image.sampler = ImageSampler::nearest();
-          let all_layer_image = add_image(format!("frame_{frame_index}_all"), all_layer_image);
+          let all_layer_image = add_image(
+            PxFrameMeta::generate_image_label(frame_index, LayerVisibility::All),
+            all_layer_image,
+          );
 
           Ok(PxFrameMeta {
             visible_layer_image,
@@ -172,6 +183,12 @@ pub(crate) struct PxFrameMeta {
   pub duration: Duration,
 }
 
+impl PxFrameMeta {
+  pub(crate) fn generate_image_label(frame_index: usize, visibility: LayerVisibility) -> String {
+    format!("frame_{}_{}", frame_index, visibility)
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct PxTagMeta {
   pub name: String,
@@ -182,7 +199,7 @@ pub struct PxTagMeta {
 }
 
 #[derive(Debug, TypePath)]
-struct PixquareLoader;
+pub(crate) struct PixquareLoader;
 
 impl AssetLoader for PixquareLoader {
   type Asset = PxArtwork;

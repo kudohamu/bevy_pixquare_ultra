@@ -1,5 +1,7 @@
 use bevy::app::Plugin;
 
+#[cfg(feature = "asset_processing")]
+use crate::processor::PixquareProcessorPlugin;
 use crate::{loader::PixquareLoaderPlugin, renderer::PixquareRendererPlugin};
 
 pub mod data_type;
@@ -17,5 +19,7 @@ pub struct PixquareUltraPlugin;
 impl Plugin for PixquareUltraPlugin {
   fn build(&self, app: &mut bevy::app::App) {
     app.add_plugins((PixquareLoaderPlugin, PixquareRendererPlugin));
+    #[cfg(feature = "asset_processing")]
+    app.add_plugins(PixquareProcessorPlugin);
   }
 }
