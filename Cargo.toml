@@ -40,3 +40,8 @@ asset_processing = [
 name = "material3d"
 path = "examples/material3d.rs"
 required-features = ["3d"]
+
+[[example]]
+name = "asset_processing"
+path = "examples/asset_processing.rs"
+required-features = ["asset_processing"]
