@@ -54,7 +54,7 @@ impl AsAssetId for PixquareFile {
 
 #[derive(Debug, Component)]
 pub struct PxFrameAnimation {
-  pub duration: f32,
+  pub duration: Option<f32>,
   pub direction: AnimationDirection,
   pub loop_count: u16,
   pub play_state: AnimationPlayState,
@@ -63,7 +63,7 @@ pub struct PxFrameAnimation {
 impl Default for PxFrameAnimation {
   fn default() -> Self {
     Self {
-      duration: 0.1,
+      duration: None,
       direction: AnimationDirection::Forward,
       loop_count: 0,
       play_state: AnimationPlayState::Playing,
@@ -541,7 +541,16 @@ fn update_frame_index(
     let timer = match px_state.animation_timer.as_mut() {
       Some(timer) => timer,
       None => {
-        let timer = Timer::from_seconds(frame_animation.duration, TimerMode::Once);
+        let Some(default_frame_duration) = artwork.frame_duration(px_state.frame_index as usize)
+        else {
+          continue;
+        };
+        let timer = Timer::from_seconds(
+          frame_animation
+            .duration
+            .unwrap_or(default_frame_duration.as_secs_f32()),
+          TimerMode::Once,
+        );
         px_state.animation_timer = Some(timer);
 
         px_state.animation_timer.as_mut().unwrap()
@@ -953,7 +962,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         loop_count: 0,
         ..Default::default()
       });
@@ -976,7 +985,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         loop_count: 0,
         ..Default::default()
       });
@@ -1004,7 +1013,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Backward,
         loop_count: 0,
         ..Default::default()
@@ -1035,7 +1044,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Backward,
         loop_count: 0,
         ..Default::default()
@@ -1064,7 +1073,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::PingPong,
         loop_count: 0,
         ..Default::default()
@@ -1097,7 +1106,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::PingPong,
         loop_count: 0,
         ..Default::default()
@@ -1130,7 +1139,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::PingPong,
         loop_count: 0,
         ..Default::default()
@@ -1150,7 +1159,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1173,7 +1182,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Backward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1196,7 +1205,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::PingPong,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1219,7 +1228,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1243,7 +1252,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Backward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1267,7 +1276,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::PingPong,
         play_state: AnimationPlayState::Playing,
         ..default()
@@ -1305,7 +1314,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Playing,
         ..default()
@@ -1327,7 +1336,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1360,7 +1369,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Playing,
         ..default()
@@ -1389,7 +1398,7 @@ mod tests {
       .get_entity_mut(entity)
       .unwrap()
       .insert(PxFrameAnimation {
-        duration: FRAME_DURATION.as_secs_f32(),
+        duration: Some(FRAME_DURATION.as_secs_f32()),
         direction: AnimationDirection::Forward,
         play_state: AnimationPlayState::Paused,
         ..default()
@@ -1432,7 +1441,7 @@ mod tests {
       .init_resource::<ObservedAnimationLoopFinishedEvents>()
       .add_observer(observe_animation_loop_finished_event);
     app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
-      duration: FRAME_DURATION.as_secs_f32(),
+      duration: Some(FRAME_DURATION.as_secs_f32()),
       loop_count: 1,
       ..default()
     });
@@ -1479,5 +1488,40 @@ mod tests {
         .0,
       vec![entity]
     );
+  }
+
+  #[test]
+  fn test_uses_px_frame_duration_when_animation_duration_is_none() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let px_frame_duration = *get_px_artwork(&app, entity).frame_duration(0).unwrap();
+    let margin = Duration::from_millis(1);
+    let duration_before_frame_advance = px_frame_duration.checked_sub(margin).unwrap();
+
+    *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
+      TimeUpdateStrategy::ManualDuration(duration_before_frame_advance);
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: None,
+      ..Default::default()
+    });
+
+    app.update();
+
+    let px_state = get_px_state(&app, entity);
+    assert_eq!(px_state.frame_index, 0);
+    assert!(
+      px_state
+        .animation_timer
+        .as_ref()
+        .unwrap()
+        .duration()
+        .abs_diff(px_frame_duration)
+        < Duration::from_micros(1)
+    );
+
+    *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
+      TimeUpdateStrategy::ManualDuration(margin * 2);
+    app.update();
+
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
   }
 }

@@ -32,7 +32,6 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
     },
     PxTag::new("front".into()),
     PxFrameAnimation {
-      duration: 0.3,
       play_state: AnimationPlayState::Playing,
       ..default()
     },
