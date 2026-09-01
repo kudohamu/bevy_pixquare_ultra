@@ -2,6 +2,7 @@ use bevy::{
   app::{App, Plugin, PostUpdate},
   asset::{AsAssetId, AssetId, Assets, Handle},
   ecs::{
+    change_detection::DetectChanges,
     component::{Component, Mutable},
     entity::Entity,
     lifecycle::RemovedComponents,
@@ -9,9 +10,12 @@ use bevy::{
     query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
+    world::Ref,
   },
-  image::Image,
+  image::{Image, TextureAtlasLayout},
   log::error,
+  math::URect,
+  platform::collections::HashMap,
   prelude::AssetChanged,
   sprite::Sprite,
   sprite_render::{Material2d, MeshMaterial2d},
@@ -25,7 +29,7 @@ use bevy::pbr::{Material, MeshMaterial3d};
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState, LayerVisibility},
   event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
-  loader::PxArtwork,
+  loader::{PxArtwork, PxAtlasMeta},
 };
 
 #[derive(Debug, Component)]
@@ -139,6 +143,24 @@ struct PxRenderedImageCache {
   image: Option<Handle<Image>>,
   key: Option<PxRenderedImageKey>,
   dirty: bool,
+}
+
+#[derive(Debug, Component)]
+pub struct PxAtlas {
+  regions: HashMap<String, URect>,
+}
+
+#[derive(Debug, Component)]
+pub(crate) struct PxAtlasMeta {
+  artwork_id: AssetId<PxArtwork>,
+  atlas_layout: Handle<TextureAtlasLayout>,
+  regions: HashMap<String, PxAtlasRegionMeta>,
+}
+
+#[derive(Debug, Component)]
+pub(crate) struct PxAtlasRegionMeta {
+  atlas_index: usize,
+  rect: URect,
 }
 
 pub trait RenderPx {
@@ -630,6 +652,50 @@ fn advance_animation_frame(
   return false;
 }
 
+fn initialize_px_atlas(
+  mut commands: Commands,
+  q_px: Query<(Entity, &PixquareFile, Ref<PxAtlas>, Option<&PxAtlasMeta>)>,
+  res_pxartworks: Res<Assets<PxArtwork>>,
+  mut res_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+) {
+  for (entity, px_file, px_atlas, px_atlas_meta) in q_px {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
+      return;
+    };
+    if !px_atlas.is_changed()
+      && px_atlas_meta.is_some_and(|meta| px_file.artwork.id() == meta.artwork_id)
+    {
+      continue;
+    }
+
+    let mut region_meta_map = HashMap::new();
+    let mut atlas_layout = TextureAtlasLayout::new_empty(px_artwork.canvas_size());
+
+    let mut regions = px_atlas.regions.iter().collect::<Vec<_>>();
+    regions.sort_by(|a, b| a.0.cmp(b.0));
+
+    for (name, rect) in regions {
+      let atlas_index = atlas_layout.add_texture(*rect);
+
+      region_meta_map.insert(
+        name.clone(),
+        PxAtlasRegionMeta {
+          atlas_index,
+          rect: *rect,
+        },
+      );
+    }
+
+    let atlas_layout = res_atlas_layouts.add(atlas_layout);
+
+    commands.entity(entity).insert(PxAtlasMeta {
+      artwork_id: px_file.artwork.id(),
+      atlas_layout,
+      regions: region_meta_map,
+    });
+  }
+}
+
 #[derive(Debug)]
 pub struct PixquareRendererPlugin;
 
@@ -659,6 +725,7 @@ impl Plugin for PixquareRendererPlugin {
           (apply_image::<Sprite>, apply_image::<ImageNode>),
           update_frame_index,
           cleanup_removed_px_files,
+          initialize_px_atlas,
         )
           .chain(),
       )
