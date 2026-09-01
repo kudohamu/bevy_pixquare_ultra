@@ -12,7 +12,7 @@ use bevy::{
     system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
     world::Ref,
   },
-  image::{Image, TextureAtlasLayout},
+  image::{Image, TextureAtlas, TextureAtlasLayout},
   log::error,
   math::URect,
   platform::collections::HashMap,
@@ -29,7 +29,7 @@ use bevy::pbr::{Material, MeshMaterial3d};
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState, LayerVisibility},
   event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
-  loader::{PxArtwork, PxAtlasMeta},
+  loader::PxArtwork,
 };
 
 #[derive(Debug, Component)]
@@ -147,20 +147,49 @@ struct PxRenderedImageCache {
 
 #[derive(Debug, Component)]
 pub struct PxAtlas {
-  regions: HashMap<String, URect>,
+  source: PxAtlasSource,
+}
+
+#[derive(Debug, Clone)]
+enum PxAtlasSource {
+  Code(HashMap<String, URect>),
+}
+
+impl PxAtlas {
+  pub fn new(data: HashMap<String, URect>) -> Self {
+    Self {
+      source: PxAtlasSource::Code(data),
+    }
+  }
+}
+
+#[derive(Debug, Component)]
+pub struct PxAtlasName(pub String);
+
+impl PxAtlasName {
+  pub fn new(name: String) -> Self {
+    Self(name)
+  }
 }
 
 #[derive(Debug, Component)]
 pub(crate) struct PxAtlasMeta {
   artwork_id: AssetId<PxArtwork>,
   atlas_layout: Handle<TextureAtlasLayout>,
-  regions: HashMap<String, PxAtlasRegionMeta>,
+  atlas_indices: HashMap<String, usize>,
 }
 
-#[derive(Debug, Component)]
-pub(crate) struct PxAtlasRegionMeta {
-  atlas_index: usize,
-  rect: URect,
+impl PxAtlasMeta {
+  fn get_texture_atlas(&self, name: &str) -> Option<TextureAtlas> {
+    let Some(index) = self.atlas_indices.get(name) else {
+      return None;
+    };
+
+    Some(TextureAtlas {
+      layout: self.atlas_layout.clone(),
+      index: *index,
+    })
+  }
 }
 
 pub trait RenderPx {
@@ -169,6 +198,7 @@ pub trait RenderPx {
   fn render_px(
     &mut self,
     texture: Handle<Image>,
+    atlas: Option<TextureAtlas>,
     _param: &mut SystemParamItem<'_, '_, Self::Param>,
   );
 }
@@ -179,9 +209,11 @@ impl RenderPx for Sprite {
   fn render_px(
     &mut self,
     texture: Handle<Image>,
+    atlas: Option<TextureAtlas>,
     _param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
     self.image = texture;
+    self.texture_atlas = atlas;
   }
 }
 
@@ -191,9 +223,11 @@ impl RenderPx for ImageNode {
   fn render_px(
     &mut self,
     texture: Handle<Image>,
+    atlas: Option<TextureAtlas>,
     _param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
     self.image = texture;
+    self.texture_atlas = atlas;
   }
 }
 
@@ -203,12 +237,13 @@ impl<M: Material2d + RenderPx> RenderPx for MeshMaterial2d<M> {
   fn render_px(
     &mut self,
     texture: Handle<Image>,
+    atlas: Option<TextureAtlas>,
     param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
     let Some(material) = param.0.get_mut(&*self) else {
       return;
     };
-    material.render_px(texture, &mut param.1);
+    material.render_px(texture, atlas, &mut param.1);
   }
 }
 
@@ -219,12 +254,13 @@ impl<M: Material + RenderPx> RenderPx for MeshMaterial3d<M> {
   fn render_px(
     &mut self,
     texture: Handle<Image>,
+    atlas: Option<TextureAtlas>,
     param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
     let Some(material) = param.0.get_mut(&*self) else {
       return;
     };
-    material.render_px(texture, &mut param.1);
+    material.render_px(texture, atlas, &mut param.1);
   }
 }
 
@@ -366,20 +402,33 @@ fn generate_image(
 
 fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
   mut q_px: Query<
-    (&mut T, &PxRenderedImageCache),
     (
-      Or<(Added<T>, Changed<PxRenderedImageCache>)>,
+      &mut T,
+      &PxRenderedImageCache,
+      Option<&PxAtlasMeta>,
+      Option<&PxAtlasName>,
+    ),
+    (
+      Or<(
+        Added<T>,
+        Changed<PxRenderedImageCache>,
+        Changed<PxAtlasMeta>,
+        Changed<PxAtlasName>,
+      )>,
       Without<PendingPxInitialization>,
     ),
   >,
   mut param: StaticSystemParam<T::Param>,
 ) {
-  for (mut target, rendered_image) in &mut q_px {
+  for (mut target, rendered_image, px_atlas, px_atlas_name) in &mut q_px {
     let Some(image) = &rendered_image.image else {
       continue;
     };
+    let atlas = px_atlas.and_then(|atlas| {
+      px_atlas_name.and_then(|atlas_name| atlas.get_texture_atlas(&atlas_name.0))
+    });
 
-    target.render_px(image.clone(), &mut param);
+    target.render_px(image.clone(), atlas, &mut param);
   }
 }
 
@@ -660,7 +709,7 @@ fn initialize_px_atlas(
 ) {
   for (entity, px_file, px_atlas, px_atlas_meta) in q_px {
     let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
-      return;
+      continue;
     };
     if !px_atlas.is_changed()
       && px_atlas_meta.is_some_and(|meta| px_file.artwork.id() == meta.artwork_id)
@@ -668,22 +717,17 @@ fn initialize_px_atlas(
       continue;
     }
 
-    let mut region_meta_map = HashMap::new();
+    let mut atlas_indices = HashMap::new();
     let mut atlas_layout = TextureAtlasLayout::new_empty(px_artwork.canvas_size());
 
-    let mut regions = px_atlas.regions.iter().collect::<Vec<_>>();
+    let mut regions = match &px_atlas.source {
+      PxAtlasSource::Code(regions) => regions.iter().collect::<Vec<_>>(),
+    };
     regions.sort_by(|a, b| a.0.cmp(b.0));
 
     for (name, rect) in regions {
       let atlas_index = atlas_layout.add_texture(*rect);
-
-      region_meta_map.insert(
-        name.clone(),
-        PxAtlasRegionMeta {
-          atlas_index,
-          rect: *rect,
-        },
-      );
+      atlas_indices.insert(name.clone(), atlas_index);
     }
 
     let atlas_layout = res_atlas_layouts.add(atlas_layout);
@@ -691,8 +735,17 @@ fn initialize_px_atlas(
     commands.entity(entity).insert(PxAtlasMeta {
       artwork_id: px_file.artwork.id(),
       atlas_layout,
-      regions: region_meta_map,
+      atlas_indices,
     });
+  }
+}
+
+fn cleanup_removed_px_atlas(mut commands: Commands, mut removed: RemovedComponents<PxAtlas>) {
+  for entity in removed.read() {
+    let Ok(mut entity_commands) = commands.get_entity(entity) else {
+      continue;
+    };
+    entity_commands.remove::<PxAtlasMeta>();
   }
 }
 
@@ -709,6 +762,7 @@ impl Plugin for PixquareRendererPlugin {
             (
               mark_changed_px_files_as_pending,
               initialize_pending_px_files,
+              initialize_px_atlas,
             )
               .chain(),
             (
@@ -725,7 +779,7 @@ impl Plugin for PixquareRendererPlugin {
           (apply_image::<Sprite>, apply_image::<ImageNode>),
           update_frame_index,
           cleanup_removed_px_files,
-          initialize_px_atlas,
+          cleanup_removed_px_atlas,
         )
           .chain(),
       )
@@ -781,7 +835,8 @@ mod tests {
       .add_plugins((TimePlugin, PixquareRendererPlugin))
       .insert_resource(TimeUpdateStrategy::ManualDuration(TIME_STEP))
       .insert_resource(Assets::<PxArtwork>::default())
-      .insert_resource(Assets::<Image>::default());
+      .insert_resource(Assets::<Image>::default())
+      .insert_resource(Assets::<TextureAtlasLayout>::default());
 
     app.update();
 

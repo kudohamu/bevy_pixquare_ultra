@@ -59,7 +59,7 @@ impl Material for PixquareMaterial {
 impl RenderPx for PixquareMaterial {
   type Param = ();
 
-  fn render_px(&mut self, texture: Handle<Image>, _param: &mut ()) {
+  fn render_px(&mut self, texture: Handle<Image>, _atlas: Option<TextureAtlas>, _param: &mut ()) {
     self.texture = Some(texture);
   }
 }
