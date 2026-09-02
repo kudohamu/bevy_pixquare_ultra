@@ -740,12 +740,33 @@ fn initialize_px_atlas(
   }
 }
 
-fn cleanup_removed_px_atlas(mut commands: Commands, mut removed: RemovedComponents<PxAtlas>) {
+fn cleanup_removed_px_atlas(
+  mut commands: Commands,
+  mut removed: RemovedComponents<PxAtlas>,
+  mut q_caches: Query<&mut PxRenderedImageCache>,
+) {
   for entity in removed.read() {
     let Ok(mut entity_commands) = commands.get_entity(entity) else {
       continue;
     };
     entity_commands.remove::<PxAtlasMeta>();
+
+    let Ok(mut cache) = q_caches.get_mut(entity) else {
+      continue;
+    };
+    cache.dirty = true;
+  }
+}
+
+fn cleanup_removed_px_atlas_name(
+  mut removed: RemovedComponents<PxAtlasName>,
+  mut q_caches: Query<&mut PxRenderedImageCache>,
+) {
+  for entity in removed.read() {
+    let Ok(mut cache) = q_caches.get_mut(entity) else {
+      continue;
+    };
+    cache.dirty = true;
   }
 }
 
@@ -783,6 +804,7 @@ impl Plugin for PixquareRendererPlugin {
           update_frame_index,
           cleanup_removed_px_files,
           cleanup_removed_px_atlas,
+          cleanup_removed_px_atlas_name,
         )
           .chain(),
       )
