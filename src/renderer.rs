@@ -18,9 +18,9 @@ use bevy::{
   platform::collections::HashMap,
   prelude::AssetChanged,
   sprite::Sprite,
-  sprite_render::{Material2d, MeshMaterial2d},
+  sprite_render::{Material2d, MeshMaterial2d, SpriteSystems},
   time::{Time, Timer, TimerMode},
-  ui::widget::ImageNode,
+  ui::{UiSystems, widget::ImageNode},
 };
 
 #[cfg(feature = "3d")]
@@ -776,7 +776,10 @@ impl Plugin for PixquareRendererPlugin {
             .chain(),
           mark_asset_changed_px_images_as_dirty,
           generate_image,
-          (apply_image::<Sprite>, apply_image::<ImageNode>),
+          (
+            apply_image::<Sprite>.before(SpriteSystems::ComputeSlices),
+            apply_image::<ImageNode>.before(UiSystems::Content),
+          ),
           update_frame_index,
           cleanup_removed_px_files,
           cleanup_removed_px_atlas,
