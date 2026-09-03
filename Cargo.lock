@@ -1168,6 +1168,7 @@ dependencies = [
  "image",
  "pixquare-io",
  "rmp-serde",
+ "ron",
  "serde",
 ]
 

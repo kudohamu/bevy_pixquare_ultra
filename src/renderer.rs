@@ -32,6 +32,9 @@ use crate::{
   loader::PxArtwork,
 };
 
+#[cfg(feature = "atlas_asset")]
+use crate::loader::PxAtlasAsset;
+
 #[derive(Debug, Component)]
 #[require(PxState, PendingPxInitialization, PxRenderedImageCache)]
 pub struct PixquareFile {
@@ -153,12 +156,21 @@ pub struct PxAtlas {
 #[derive(Debug, Clone)]
 enum PxAtlasSource {
   Code(HashMap<String, URect>),
+  #[cfg(feature = "atlas_asset")]
+  Asset(Handle<PxAtlasAsset>),
 }
 
 impl PxAtlas {
   pub fn new(data: HashMap<String, URect>) -> Self {
     Self {
       source: PxAtlasSource::Code(data),
+    }
+  }
+
+  #[cfg(feature = "atlas_asset")]
+  pub fn from_asset(handle: Handle<PxAtlasAsset>) -> Self {
+    Self {
+      source: PxAtlasSource::Asset(handle),
     }
   }
 }
@@ -714,6 +726,7 @@ fn initialize_px_atlas(
   q_px: Query<(Entity, &PixquareFile, Ref<PxAtlas>, Option<&PxAtlasMeta>)>,
   res_pxartworks: Res<Assets<PxArtwork>>,
   mut res_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+  #[cfg(feature = "atlas_asset")] res_px_atlas_asset: Res<Assets<PxAtlasAsset>>,
 ) {
   for (entity, px_file, px_atlas, px_atlas_meta) in q_px {
     let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
@@ -730,6 +743,15 @@ fn initialize_px_atlas(
 
     let mut regions = match &px_atlas.source {
       PxAtlasSource::Code(regions) => regions.iter().collect::<Vec<_>>(),
+      #[cfg(feature = "atlas_asset")]
+      PxAtlasSource::Asset(handle) => {
+        let Some(asset) = res_px_atlas_asset.get(handle) else {
+          error!("pxatlas asset is not found: {:?}", handle.path());
+          continue;
+        };
+
+        asset.regions.iter().collect::<Vec<_>>()
+      }
     };
     regions.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -873,6 +895,9 @@ mod tests {
       .insert_resource(Assets::<PxArtwork>::default())
       .insert_resource(Assets::<Image>::default())
       .insert_resource(Assets::<TextureAtlasLayout>::default());
+
+    #[cfg(feature = "atlas_asset")]
+    app.insert_resource(Assets::<PxAtlasAsset>::default());
 
     app.update();
 

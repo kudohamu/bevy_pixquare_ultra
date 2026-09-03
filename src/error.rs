@@ -163,3 +163,37 @@ impl From<rmp_serde::encode::Error> for PixquareLoaderError {
     Self::RmpSerializeError(err)
   }
 }
+
+#[cfg(feature = "atlas_asset")]
+#[derive(Debug)]
+pub enum PxAtlasLoaderError {
+  DeserializeError(ron::de::SpannedError),
+  ReadError(std::io::Error),
+}
+
+#[cfg(feature = "atlas_asset")]
+impl Display for PxAtlasLoaderError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::DeserializeError(err) => write!(f, "deserialize ron file error: {err}"),
+      Self::ReadError(err) => write!(f, "read file error: {err}"),
+    }
+  }
+}
+
+#[cfg(feature = "atlas_asset")]
+impl std::error::Error for PxAtlasLoaderError {}
+
+#[cfg(feature = "atlas_asset")]
+impl From<std::io::Error> for PxAtlasLoaderError {
+  fn from(err: std::io::Error) -> Self {
+    Self::ReadError(err)
+  }
+}
+
+#[cfg(feature = "atlas_asset")]
+impl From<ron::de::SpannedError> for PxAtlasLoaderError {
+  fn from(err: ron::de::SpannedError) -> Self {
+    Self::DeserializeError(err)
+  }
+}

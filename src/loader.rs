@@ -16,6 +16,14 @@ use crate::{
   error::PixquareLoaderError,
 };
 
+#[cfg(feature = "atlas_asset")]
+use crate::error::PxAtlasLoaderError;
+
+#[cfg(feature = "atlas_asset")]
+use bevy::{math::URect, platform::collections::HashMap};
+#[cfg(feature = "atlas_asset")]
+use serde::Deserialize;
+
 #[derive(Debug, Asset, TypePath)]
 pub struct PxArtwork {
   canvas_size: UVec2,
@@ -24,6 +32,7 @@ pub struct PxArtwork {
 }
 
 impl PxArtwork {
+  #[cfg(feature = "asset_processing")]
   pub(crate) fn new(canvas_size: UVec2, frames: Vec<PxFrameMeta>, tags: Vec<PxTagMeta>) -> Self {
     Self {
       canvas_size,
@@ -198,6 +207,27 @@ pub struct PxTagMeta {
   pub loop_count: u16,
 }
 
+#[cfg(feature = "atlas_asset")]
+#[derive(Debug, Clone, Asset, TypePath)]
+pub struct PxAtlasAsset {
+  pub(crate) regions: HashMap<String, URect>,
+}
+
+#[cfg(feature = "atlas_asset")]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct PxAtlasRon {
+  regions: HashMap<String, PxAtlasRegionRon>,
+}
+
+#[cfg(feature = "atlas_asset")]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct PxAtlasRegionRon {
+  x: u32,
+  y: u32,
+  width: u32,
+  height: u32,
+}
+
 #[derive(Debug, TypePath)]
 pub(crate) struct PixquareLoader;
 
@@ -227,12 +257,105 @@ impl AssetLoader for PixquareLoader {
   }
 }
 
+#[cfg(feature = "atlas_asset")]
+#[derive(Debug, TypePath)]
+struct PxAtlasLoader;
+
+#[cfg(feature = "atlas_asset")]
+impl AssetLoader for PxAtlasLoader {
+  type Asset = PxAtlasAsset;
+  type Settings = ();
+  type Error = PxAtlasLoaderError;
+
+  async fn load(
+    &self,
+    reader: &mut dyn bevy::asset::io::Reader,
+    _settings: &Self::Settings,
+    _load_context: &mut bevy::asset::LoadContext<'_>,
+  ) -> Result<Self::Asset, Self::Error> {
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes).await?;
+
+    let atlas_ron = ron::de::from_bytes::<PxAtlasRon>(&bytes)?;
+    let mut regions = HashMap::new();
+
+    for (name, r) in atlas_ron.regions {
+      regions.insert(name, URect::new(r.x, r.y, r.x + r.width, r.y + r.height));
+    }
+
+    Ok(PxAtlasAsset { regions })
+  }
+
+  fn extensions(&self) -> &[&str] {
+    &["pxatlas.ron"]
+  }
+}
+
 #[derive(Debug)]
 pub struct PixquareLoaderPlugin;
 
 impl Plugin for PixquareLoaderPlugin {
   fn build(&self, app: &mut App) {
-    app.init_asset::<PxArtwork>();
-    app.register_asset_loader(PixquareLoader);
+    app
+      .init_asset::<PxArtwork>()
+      .register_asset_loader(PixquareLoader);
+
+    #[cfg(feature = "atlas_asset")]
+    app
+      .init_asset::<PxAtlasAsset>()
+      .register_asset_loader(PxAtlasLoader);
+  }
+}
+
+#[cfg(all(test, feature = "atlas_asset"))]
+mod tests {
+  use bevy::{
+    app::TaskPoolPlugin,
+    asset::{AssetPlugin, AssetServer, Assets, LoadState},
+  };
+
+  use super::*;
+
+  #[test]
+  fn test_loads_px_atlas_asset_from_ron_file() {
+    let mut app = App::new();
+    app.add_plugins((
+      TaskPoolPlugin::default(),
+      AssetPlugin::default(),
+      PixquareLoaderPlugin,
+    ));
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let atlas_handle = asset_server.load::<PxAtlasAsset>("sprite.pxatlas.ron");
+
+    for _ in 0..10_000 {
+      app.update();
+
+      match asset_server.load_state(&atlas_handle) {
+        LoadState::Loaded => break,
+        LoadState::Failed(error) => panic!("failed to load pxatlas asset: {error}"),
+        _ => continue,
+      }
+    }
+
+    assert!(matches!(
+      asset_server.load_state(&atlas_handle),
+      LoadState::Loaded
+    ));
+
+    let atlas_assets = app.world().resource::<Assets<PxAtlasAsset>>();
+    let atlas = atlas_assets.get(&atlas_handle).unwrap();
+
+    assert_eq!(atlas.regions.len(), 4);
+    assert_eq!(atlas.regions.get("flower"), Some(&URect::new(0, 0, 16, 16)));
+    assert_eq!(atlas.regions.get("wood"), Some(&URect::new(16, 0, 32, 32)));
+    assert_eq!(
+      atlas.regions.get("board"),
+      Some(&URect::new(32, 48, 48, 64))
+    );
+    assert_eq!(
+      atlas.regions.get("block"),
+      Some(&URect::new(48, 48, 64, 64))
+    );
   }
 }
