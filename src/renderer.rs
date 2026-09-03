@@ -780,33 +780,36 @@ impl Plugin for PixquareRendererPlugin {
         PostUpdate,
         (
           (
+            mark_changed_px_files_as_pending,
+            initialize_pending_px_files,
             (
-              mark_changed_px_files_as_pending,
-              initialize_pending_px_files,
-              initialize_px_atlas,
+              detect_removed_animation_component,
+              detect_added_animation_component,
+              detect_updated_frame_animation_component,
+              detect_removed_tag_component,
+              detect_added_or_updated_tag_component,
             )
               .chain(),
+          )
+            .chain()
+            .before(generate_image),
+          (initialize_px_atlas, mark_asset_changed_px_images_as_dirty).before(generate_image),
+          (
+            cleanup_removed_px_files,
+            cleanup_removed_px_atlas,
+            cleanup_removed_px_atlas_name,
+          )
+            .before(initialize_px_atlas),
+          (
+            generate_image,
             (
-              detect_added_or_updated_tag_component,
-              detect_removed_tag_component,
-              detect_added_animation_component,
-              detect_removed_animation_component,
-              detect_updated_frame_animation_component,
+              apply_image::<Sprite>.before(SpriteSystems::ComputeSlices),
+              apply_image::<ImageNode>.before(UiSystems::Content),
             ),
+            update_frame_index,
           )
             .chain(),
-          mark_asset_changed_px_images_as_dirty,
-          generate_image,
-          (
-            apply_image::<Sprite>.before(SpriteSystems::ComputeSlices),
-            apply_image::<ImageNode>.before(UiSystems::Content),
-          ),
-          update_frame_index,
-          cleanup_removed_px_files,
-          cleanup_removed_px_atlas,
-          cleanup_removed_px_atlas_name,
-        )
-          .chain(),
+        ),
       )
       .add_observer(handle_advance_animation_frame_event);
   }
