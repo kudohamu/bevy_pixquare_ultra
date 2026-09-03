@@ -976,6 +976,25 @@ mod tests {
       .loop_count = loop_count;
   }
 
+  fn create_atlas_regions() -> HashMap<String, URect> {
+    HashMap::from([
+      ("flower".into(), URect::new(0, 0, 16, 16)),
+      ("wood".into(), URect::new(16, 0, 32, 32)),
+    ])
+  }
+
+  fn get_sprite_atlas_rect(app: &App, entity: Entity) -> Option<URect> {
+    let sprite = app.world().entity(entity).get::<Sprite>()?;
+    let atlas = sprite.texture_atlas.as_ref()?;
+    let atlas_layouts = app.world().resource::<Assets<TextureAtlasLayout>>();
+
+    atlas_layouts
+      .get(&atlas.layout)?
+      .textures
+      .get(atlas.index)
+      .map(|t| *t)
+  }
+
   #[test]
   fn test_does_not_render_while_initialization_is_pending() {
     let mut app = App::new();
@@ -1681,5 +1700,131 @@ mod tests {
     app.update();
 
     assert_eq!(get_px_state(&app, entity).frame_index, 1);
+  }
+
+  #[test]
+  fn test_applies_selected_atlas_region_to_sprite() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("flower".into()),
+    ));
+
+    app.update();
+
+    assert_eq!(
+      get_sprite_atlas_rect(&app, entity),
+      Some(URect::new(0, 0, 16, 16))
+    );
+  }
+
+  #[test]
+  fn test_updates_sprite_atlas_when_atlas_name_changes() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("flower".into()),
+    ));
+    app.update();
+
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PxAtlasName>()
+      .unwrap()
+      .0 = "wood".into();
+    app.update();
+
+    assert_eq!(
+      get_sprite_atlas_rect(&app, entity),
+      Some(URect::new(16, 0, 32, 32))
+    );
+  }
+
+  #[test]
+  fn test_clears_sprite_atlas_when_atlas_name_is_removed() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("flower".into()),
+    ));
+    app.update();
+    assert!(get_sprite_atlas_rect(&app, entity).is_some());
+
+    app.world_mut().entity_mut(entity).remove::<PxAtlasName>();
+    app.update();
+
+    assert!(
+      app
+        .world()
+        .entity(entity)
+        .get::<Sprite>()
+        .unwrap()
+        .texture_atlas
+        .is_none()
+    );
+  }
+
+  #[test]
+  fn test_clears_sprite_atlas_when_px_atlas_is_removed() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("flower".into()),
+    ));
+    app.update();
+    assert!(get_sprite_atlas_rect(&app, entity).is_some());
+
+    app.world_mut().entity_mut(entity).remove::<PxAtlas>();
+    app.update();
+
+    assert!(
+      app
+        .world()
+        .entity(entity)
+        .get::<Sprite>()
+        .unwrap()
+        .texture_atlas
+        .is_none()
+    );
+    assert!(app.world().entity(entity).get::<PxAtlasMeta>().is_none());
+  }
+
+  #[test]
+  fn test_rebuilds_atlas_layout_when_px_atlas_changes() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("flower".into()),
+    ));
+    app.update();
+
+    let updated_region = URect::new(32, 32, 48, 48);
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .insert(PxAtlas::new([("flower".into(), updated_region)].into()));
+    app.update();
+
+    assert_eq!(get_sprite_atlas_rect(&app, entity), Some(updated_region));
+  }
+
+  #[test]
+  fn test_does_not_apply_atlas_when_region_name_is_missing() {
+    let (mut app, entity) = create_px_file_app("assets/sprite.px");
+    let expected_image = get_px_artwork(&app, entity)
+      .frame_image(0, LayerVisibility::Visible)
+      .unwrap()
+      .clone();
+    app.world_mut().entity_mut(entity).insert((
+      PxAtlas::new(create_atlas_regions()),
+      PxAtlasName::new("missing".into()),
+    ));
+
+    app.update();
+
+    let sprite = app.world().entity(entity).get::<Sprite>().unwrap();
+    assert_eq!(sprite.image, expected_image);
+    assert!(sprite.texture_atlas.is_none());
   }
 }
