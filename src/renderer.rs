@@ -425,7 +425,15 @@ fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
       continue;
     };
     let atlas = px_atlas.and_then(|atlas| {
-      px_atlas_name.and_then(|atlas_name| atlas.get_texture_atlas(&atlas_name.0))
+      px_atlas_name.and_then(|atlas_name| {
+        let Some(texture_atlas) = atlas.get_texture_atlas(&atlas_name.0) else {
+          error!("atlas({}) is not found", atlas_name.0);
+
+          return None;
+        };
+
+        Some(texture_atlas)
+      })
     });
 
     target.render_px(image.clone(), atlas, &mut param);
