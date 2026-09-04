@@ -43,7 +43,6 @@ struct ProcessedPxArtworkHeader {
 impl ProcessedPxArtworkHeader {
   const MAGIC: &[u8; 4] = b"PXUL";
   const CURRENT_FORMAT_VERSION: u16 = 1;
-  const HEADER_SIZE: usize = 16;
 
   fn new(data_len: u64) -> Self {
     Self {
