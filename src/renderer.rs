@@ -862,6 +862,8 @@ mod tests {
   };
   use pixquare::model::Artwork;
 
+  use crate::loader::PixquareLoaderSettings;
+
   use super::*;
 
   const FRAME_DURATION: Duration = Duration::from_millis(100);
@@ -874,11 +876,12 @@ mod tests {
   fn add_px_artwork(app: &mut App, path: &str) -> Handle<PxArtwork> {
     let file_data = std::fs::read(path).unwrap();
     let artwork = Artwork::read(&file_data).unwrap();
+    let settings = PixquareLoaderSettings::default();
 
     let px_artwork = {
       let mut images = app.world_mut().resource_mut::<Assets<Image>>();
 
-      PxArtwork::from_artwork(&artwork, |_label, image| images.add(image)).unwrap()
+      PxArtwork::from_artwork(&artwork, &settings, |_label, image| images.add(image)).unwrap()
     };
 
     app

@@ -10,6 +10,7 @@ use bevy::{
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use pixquare::model::Artwork;
+use serde::{Deserialize, Serialize};
 
 use crate::{
   data_type::{AnimationDirection, LayerVisibility},
@@ -91,6 +92,7 @@ impl PxArtwork {
 
   pub(crate) fn from_artwork(
     artwork: &Artwork,
+    settings: &PixquareLoaderSettings,
     mut add_image: impl FnMut(String, Image) -> Handle<Image>,
   ) -> Result<Self, PixquareLoaderError> {
     let frames = artwork
@@ -102,6 +104,11 @@ impl PxArtwork {
           let visible_layer_buf =
             artwork.get_frame_image(frame_index, LayerVisibility::Visible.into())?;
 
+          let texture_format = if settings.is_srgb {
+            TextureFormat::Rgba8UnormSrgb
+          } else {
+            TextureFormat::Rgba8Unorm
+          };
           let mut visible_layer_image = Image::new(
             Extent3d {
               width: artwork.canvas_size.width,
@@ -110,10 +117,10 @@ impl PxArtwork {
             },
             TextureDimension::D2,
             visible_layer_buf,
-            TextureFormat::Rgba8UnormSrgb,
-            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+            texture_format,
+            settings.asset_usage,
           );
-          visible_layer_image.sampler = ImageSampler::nearest();
+          visible_layer_image.sampler = settings.sampler.clone();
           let visible_layer_image = add_image(
             PxFrameMeta::generate_image_label(frame_index, LayerVisibility::Visible),
             visible_layer_image,
@@ -231,21 +238,38 @@ pub(crate) struct PxAtlasRegionRon {
 #[derive(Debug, TypePath)]
 pub(crate) struct PixquareLoader;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PixquareLoaderSettings {
+  pub sampler: ImageSampler,
+  pub is_srgb: bool,
+  pub asset_usage: RenderAssetUsages,
+}
+
+impl Default for PixquareLoaderSettings {
+  fn default() -> Self {
+    Self {
+      sampler: ImageSampler::nearest(),
+      is_srgb: true,
+      asset_usage: RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    }
+  }
+}
+
 impl AssetLoader for PixquareLoader {
   type Asset = PxArtwork;
-  type Settings = ();
+  type Settings = PixquareLoaderSettings;
   type Error = PixquareLoaderError;
 
   async fn load(
     &self,
     reader: &mut dyn bevy::asset::io::Reader,
-    _settings: &Self::Settings,
+    settings: &Self::Settings,
     load_context: &mut bevy::asset::LoadContext<'_>,
   ) -> Result<Self::Asset, Self::Error> {
     let mut bytes = Vec::new();
     reader.read_to_end(&mut bytes).await?;
     let artwork = Artwork::read(&bytes)?;
-    let px_artwork = PxArtwork::from_artwork(&artwork, |label, image| {
+    let px_artwork = PxArtwork::from_artwork(&artwork, settings, |label, image| {
       load_context.add_labeled_asset(label, image)
     })?;
 

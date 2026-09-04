@@ -9,7 +9,7 @@ use bevy::{
   image::{CompressedImageFormats, Image},
   math::UVec2,
   reflect::TypePath,
-  render::renderer::RenderDevice,
+  render::{render_resource::TextureFormat, renderer::RenderDevice},
 };
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ use crate::{
   data_type::{AnimationDirection, LayerVisibility},
   error::PixquareLoaderError,
   image::{decode_image, encode_image},
-  loader::{PixquareLoader, PxArtwork, PxFrameMeta, PxTagMeta},
+  loader::{PixquareLoader, PixquareLoaderSettings, PxArtwork, PxFrameMeta, PxTagMeta},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -157,7 +157,7 @@ struct ProcessedPxArtworkV1 {
 impl ProcessedPxArtworkV1 {
   async fn from_artwork(
     artwork: &PxArtwork,
-    asset: bevy::asset::saver::SavedAsset<'_, PxArtwork>,
+    asset: &bevy::asset::saver::SavedAsset<'_, PxArtwork>,
   ) -> Result<(ProcessedPxArtworkV1, Vec<Vec<u8>>), PixquareLoaderError> {
     let mut frames = Vec::with_capacity(artwork.frame_count());
     let mut images = Vec::with_capacity(artwork.frame_count() * 2);
@@ -296,7 +296,7 @@ struct ProcessedPixquareLoader {
 impl AssetLoader for ProcessedPixquareLoader {
   type Asset = PxArtwork;
 
-  type Settings = ();
+  type Settings = PixquareLoaderSettings;
 
   type Error = PixquareLoaderError;
 
@@ -346,7 +346,7 @@ impl AssetSaver for PixquareSaver {
   ) -> Result<<Self::OutputLoader as AssetLoader>::Settings, Self::Error> {
     let px_artwork = asset.get();
     let (processed_artwork, image_bufs) =
-      ProcessedPxArtworkV1::from_artwork(px_artwork, asset).await?;
+      ProcessedPxArtworkV1::from_artwork(px_artwork, &asset).await?;
     let artwork_buf = rmp_serde::to_vec_named(&processed_artwork)?;
 
     let header = ProcessedPxArtworkHeader::new(artwork_buf.len() as u64);
@@ -358,7 +358,19 @@ impl AssetSaver for PixquareSaver {
       writer.write_all(image_buf).await?;
     }
 
-    Ok(())
+    let first_image_label = PxFrameMeta::generate_image_label(0, LayerVisibility::All);
+    let image = asset.get_labeled::<Image, str>(&first_image_label);
+
+    let output_settings = match image {
+      Some(image) => PixquareLoaderSettings {
+        sampler: image.sampler.clone(),
+        is_srgb: image.texture_descriptor.format == TextureFormat::Rgba8UnormSrgb,
+        asset_usage: image.asset_usage,
+      },
+      None => PixquareLoaderSettings::default(),
+    };
+
+    Ok(output_settings)
   }
 }
 
