@@ -221,6 +221,7 @@ impl ProcessedPxArtworkV1 {
     reader: &mut dyn bevy::asset::io::Reader,
     header: &ProcessedPxArtworkHeader,
     supported_compressed_formats: CompressedImageFormats,
+    settings: &PixquareLoaderSettings,
     load_context: &mut bevy::asset::LoadContext<'_>,
   ) -> Result<(Self, Vec<Handle<Image>>), PixquareLoaderError> {
     let mut px_artwork_data_buf = vec![0_u8; header.data_len as usize];
@@ -238,6 +239,7 @@ impl ProcessedPxArtworkV1 {
         image_meta.codec.into(),
         &image_buf,
         supported_compressed_formats,
+        settings,
       )?;
 
       if image.width() != px_artwork_data.canvas_width
@@ -302,7 +304,7 @@ impl AssetLoader for ProcessedPixquareLoader {
   async fn load(
     &self,
     reader: &mut dyn bevy::asset::io::Reader,
-    _settings: &Self::Settings,
+    settings: &Self::Settings,
     load_context: &mut bevy::asset::LoadContext<'_>,
   ) -> Result<Self::Asset, Self::Error> {
     let header = ProcessedPxArtworkHeader::read(reader).await?;
@@ -313,6 +315,7 @@ impl AssetLoader for ProcessedPixquareLoader {
           reader,
           &header,
           self.supported_compressed_formats,
+          settings,
           load_context,
         )
         .await?;

@@ -1,11 +1,10 @@
 use bevy::{
-  asset::RenderAssetUsages,
-  image::{CompressedImageFormats, Image, ImageFormat, ImageSampler, ImageType},
+  image::{CompressedImageFormats, Image, ImageFormat, ImageType},
   render::render_resource::TextureFormat,
 };
 use image::{ExtendedColorType, ImageEncoder, codecs::qoi::QoiEncoder};
 
-use crate::{error::PixquareLoaderError, processor::ImageCodec};
+use crate::{error::PixquareLoaderError, loader::PixquareLoaderSettings, processor::ImageCodec};
 
 pub fn encode_image(codec: ImageCodec, image: &Image) -> Result<Vec<u8>, PixquareLoaderError> {
   if image.texture_descriptor.format != TextureFormat::Rgba8UnormSrgb {
@@ -45,6 +44,7 @@ pub fn decode_image(
   codec: ImageCodec,
   encoded_buf: &[u8],
   supported_compressed_formats: CompressedImageFormats,
+  settings: &PixquareLoaderSettings,
 ) -> Result<Image, PixquareLoaderError> {
   let format = match codec {
     ImageCodec::Qoi => ImageFormat::Qoi,
@@ -54,9 +54,9 @@ pub fn decode_image(
     encoded_buf,
     ImageType::Format(format),
     supported_compressed_formats,
-    true,
-    ImageSampler::nearest(),
-    RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    settings.is_srgb,
+    settings.sampler.clone(),
+    settings.asset_usage,
   )?;
 
   Ok(image)

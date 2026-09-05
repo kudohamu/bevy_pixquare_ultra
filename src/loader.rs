@@ -136,10 +136,10 @@ impl PxArtwork {
             },
             TextureDimension::D2,
             all_layer_buf,
-            TextureFormat::Rgba8UnormSrgb,
-            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+            texture_format,
+            settings.asset_usage,
           );
-          all_layer_image.sampler = ImageSampler::nearest();
+          all_layer_image.sampler = settings.sampler.clone();
           let all_layer_image = add_image(
             PxFrameMeta::generate_image_label(frame_index, LayerVisibility::All),
             all_layer_image,
