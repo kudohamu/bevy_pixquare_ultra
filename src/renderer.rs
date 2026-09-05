@@ -689,11 +689,13 @@ fn advance_animation_frame(
   px_state: &mut PxState,
 ) -> bool {
   if frame_animation.loop_count != 0 {
+    let range = px_artwork.get_tag_range(&px_state.current_tag);
+
     if px_state.loop_count >= frame_animation.loop_count {
       frame_animation.play_state = AnimationPlayState::Paused;
       return true;
     }
-    if px_state.frame_index as usize >= px_artwork.frame_count() - 1 {
+    if px_state.frame_index >= range.end - 1 {
       px_state.loop_count += 1;
     }
   }
