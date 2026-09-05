@@ -1,11 +1,12 @@
 use bevy::{
   app::{App, Plugin, PostUpdate},
-  asset::{AsAssetId, AssetId, Assets, Handle},
+  asset::{AsAssetId, AssetId, AssetLoadFailedEvent, Assets, Handle},
   ecs::{
     change_detection::DetectChanges,
     component::{Component, Mutable},
     entity::Entity,
     lifecycle::RemovedComponents,
+    message::MessageReader,
     observer::On,
     query::{Added, Changed, Or, With, Without},
     schedule::IntoScheduleConfigs,
@@ -825,6 +826,15 @@ fn cleanup_removed_px_atlas_name(
   }
 }
 
+fn log_px_artwork_load_failures(mut failures: MessageReader<AssetLoadFailedEvent<PxArtwork>>) {
+  for failure in failures.read() {
+    error!(
+      "failed to load Pixquare artwork `{}`: {}",
+      failure.path, failure.error
+    );
+  }
+}
+
 #[derive(Debug)]
 pub struct PixquareRendererPlugin;
 
@@ -834,6 +844,7 @@ impl Plugin for PixquareRendererPlugin {
       .add_systems(
         PostUpdate,
         (
+          log_px_artwork_load_failures,
           (
             mark_changed_px_files_as_pending,
             initialize_pending_px_files,
@@ -919,6 +930,7 @@ mod tests {
     let mut app = App::new();
     app
       .add_plugins((TimePlugin, PixquareRendererPlugin))
+      .add_message::<AssetLoadFailedEvent<PxArtwork>>()
       .insert_resource(TimeUpdateStrategy::ManualDuration(TIME_STEP))
       .insert_resource(Assets::<PxArtwork>::default())
       .insert_resource(Assets::<Image>::default())
