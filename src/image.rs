@@ -7,7 +7,9 @@ use image::{ExtendedColorType, ImageEncoder, codecs::qoi::QoiEncoder};
 use crate::{error::PixquareLoaderError, loader::PixquareLoaderSettings, processor::ImageCodec};
 
 pub fn encode_image(codec: ImageCodec, image: &Image) -> Result<Vec<u8>, PixquareLoaderError> {
-  if image.texture_descriptor.format != TextureFormat::Rgba8UnormSrgb {
+  if image.texture_descriptor.format != TextureFormat::Rgba8UnormSrgb
+    && image.texture_descriptor.format != TextureFormat::Rgba8Unorm
+  {
     return Err(PixquareLoaderError::UnsupportedProcessingTargetImageError);
   }
 
