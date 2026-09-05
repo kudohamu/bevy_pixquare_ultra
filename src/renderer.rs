@@ -570,7 +570,7 @@ fn detect_added_or_updated_tag_component(
       };
 
       px_state.frame_index =
-        artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
+        artwork.get_initial_frame_index(&px_state.current_tag, initial_direction);
       px_state.current_direction = frame_animation.direction;
       px_state.temporary_direction = initial_direction;
       px_state.loop_count = 0;
@@ -606,10 +606,8 @@ fn detect_removed_tag_component(
         AnimationDirection::PingPong => AnimationDirection::Forward,
       };
 
-      animation_state.frame_index = artwork.get_initial_frame_index(
-        &animation_state.current_tag,
-        animation_state.temporary_direction,
-      );
+      animation_state.frame_index =
+        artwork.get_initial_frame_index(&animation_state.current_tag, initial_direction);
       animation_state.current_direction = frame_animation.direction;
       animation_state.temporary_direction = initial_direction;
       animation_state.loop_count = 0;
@@ -696,25 +694,19 @@ fn advance_animation_frame(
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
 ) -> bool {
-  if frame_animation.loop_count != 0 {
-    let range = px_artwork.get_tag_range(&px_state.current_tag);
-
-    if px_state.loop_count >= frame_animation.loop_count {
-      frame_animation.play_state = AnimationPlayState::Paused;
-      return true;
-    }
-    if px_state.frame_index >= range.end - 1 {
-      px_state.loop_count += 1;
-    }
+  if frame_animation.loop_count != 0 && px_state.loop_count >= frame_animation.loop_count {
+    frame_animation.play_state = AnimationPlayState::Paused;
+    return false;
   }
 
+  let range = px_artwork.get_tag_range(&px_state.current_tag);
+  let previous_frame_index = px_state.frame_index;
+  let previous_direction = px_state.temporary_direction;
   let next_frame_index = px_state.next_frame(&px_artwork);
   px_state.frame_index = next_frame_index;
   px_state.animation_timer = None;
 
   if px_state.current_direction == AnimationDirection::PingPong {
-    let range = px_artwork.get_tag_range(&px_state.current_tag);
-
     if px_state.temporary_direction == AnimationDirection::Forward
       && px_state.frame_index >= range.end - 1
     {
@@ -725,6 +717,29 @@ fn advance_animation_frame(
       && px_state.frame_index == range.start
     {
       px_state.temporary_direction = AnimationDirection::Forward;
+    }
+  }
+
+  let is_single_frame = range.len() == 1;
+  let is_final_frame = match px_state.current_direction {
+    AnimationDirection::Forward => {
+      previous_frame_index == range.end - 1 && next_frame_index == range.start
+    }
+    AnimationDirection::Backward => {
+      previous_frame_index == range.start && next_frame_index == range.end - 1
+    }
+    AnimationDirection::PingPong => {
+      previous_direction == AnimationDirection::Backward && next_frame_index == range.start
+    }
+  };
+  let is_loop_finished = is_single_frame || is_final_frame;
+
+  if frame_animation.loop_count != 0 && is_loop_finished {
+    px_state.loop_count += 1;
+
+    if px_state.loop_count >= frame_animation.loop_count {
+      frame_animation.play_state = AnimationPlayState::Paused;
+      return true;
     }
   }
 
@@ -1576,6 +1591,54 @@ mod tests {
   }
 
   #[test]
+  fn test_starts_new_tag_from_first_frame_when_ping_pong_was_moving_backward() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("front_move".into()),
+      PxFrameAnimation {
+        direction: AnimationDirection::PingPong,
+        play_state: AnimationPlayState::Paused,
+        ..default()
+      },
+    ));
+    app.update();
+
+    set_frame_index(&mut app, entity, 5);
+    set_temporary_direction(&mut app, entity, AnimationDirection::Backward);
+    set_tag(&mut app, entity, Some("right_move".into()));
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert_eq!(state.current_tag.as_deref(), Some("right_move"));
+    assert_eq!(state.frame_index, 7);
+    assert_eq!(state.temporary_direction, AnimationDirection::Forward);
+  }
+
+  #[test]
+  fn test_starts_from_first_frame_when_tag_is_removed_while_ping_pong_was_moving_backward() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("front_move".into()),
+      PxFrameAnimation {
+        direction: AnimationDirection::PingPong,
+        play_state: AnimationPlayState::Paused,
+        ..default()
+      },
+    ));
+    app.update();
+
+    set_frame_index(&mut app, entity, 5);
+    set_temporary_direction(&mut app, entity, AnimationDirection::Backward);
+    set_tag(&mut app, entity, None);
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert!(state.current_tag.is_none());
+    assert_eq!(state.frame_index, 0);
+    assert_eq!(state.temporary_direction, AnimationDirection::Forward);
+  }
+
+  #[test]
   fn test_preserves_active_tag_and_status_when_switching_to_missing_tag() {
     let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
     set_tag(&mut app, entity, Some("front_move".into()));
@@ -1669,15 +1732,6 @@ mod tests {
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 0);
     assert_eq!(get_px_state(&app, entity).loop_count, 1);
-    assert!(
-      app
-        .world()
-        .resource::<ObservedAnimationLoopFinishedEvents>()
-        .0
-        .is_empty()
-    );
-
-    app.update();
     assert_eq!(
       app
         .world()
@@ -1702,6 +1756,142 @@ mod tests {
         .resource::<ObservedAnimationLoopFinishedEvents>()
         .0,
       vec![entity]
+    );
+  }
+
+  #[test]
+  fn test_finishes_forward_animation_after_returning_to_tag_first_frame() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("front_move".into()),
+      PxFrameAnimation {
+        duration: Some(FRAME_DURATION.as_secs_f32()),
+        direction: AnimationDirection::Forward,
+        loop_count: 1,
+        play_state: AnimationPlayState::Paused,
+      },
+    ));
+    app.update();
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 5);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 4);
+    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Paused
+    );
+  }
+
+  #[test]
+  fn test_finishes_backward_animation_after_returning_to_tag_last_frame() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("front_move".into()),
+      PxFrameAnimation {
+        duration: Some(FRAME_DURATION.as_secs_f32()),
+        direction: AnimationDirection::Backward,
+        loop_count: 1,
+        play_state: AnimationPlayState::Paused,
+      },
+    ));
+    app.update();
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 4);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 5);
+    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Paused
+    );
+  }
+
+  #[test]
+  fn test_finishes_ping_pong_animation_after_returning_to_first_frame() {
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: Some(FRAME_DURATION.as_secs_f32()),
+      direction: AnimationDirection::PingPong,
+      loop_count: 1,
+      play_state: AnimationPlayState::Paused,
+    });
+    app.update();
+
+    let last_frame_index = get_px_artwork(&app, entity).frame_count() as u16 - 1;
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+
+    for _ in 0..last_frame_index {
+      app.update();
+    }
+    assert_eq!(get_px_state(&app, entity).frame_index, last_frame_index);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+
+    for _ in 0..last_frame_index - 1 {
+      app.update();
+    }
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 0);
+    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Paused
     );
   }
 
