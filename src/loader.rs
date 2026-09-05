@@ -22,8 +22,6 @@ use crate::error::PxAtlasLoaderError;
 
 #[cfg(feature = "atlas_asset")]
 use bevy::{math::URect, platform::collections::HashMap};
-#[cfg(feature = "atlas_asset")]
-use serde::Deserialize;
 
 #[derive(Debug, Asset, TypePath)]
 pub struct PxArtwork {
@@ -239,6 +237,7 @@ pub(crate) struct PxAtlasRegionRon {
 pub(crate) struct PixquareLoader;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PixquareLoaderSettings {
   pub sampler: ImageSampler,
   pub is_srgb: bool,
