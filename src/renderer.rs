@@ -561,8 +561,6 @@ fn detect_added_or_updated_tag_component(
     }
 
     px_state.current_tag = Some(px_tag.0.clone());
-    px_state.frame_index =
-      artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
 
     if let Some(frame_animation) = frame_animation {
       let initial_direction = match frame_animation.direction {
@@ -571,9 +569,14 @@ fn detect_added_or_updated_tag_component(
         AnimationDirection::PingPong => AnimationDirection::Forward,
       };
 
+      px_state.frame_index =
+        artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
       px_state.current_direction = frame_animation.direction;
       px_state.temporary_direction = initial_direction;
       px_state.loop_count = 0;
+    } else {
+      px_state.frame_index =
+        artwork.get_initial_frame_index(&px_state.current_tag, AnimationDirection::Forward);
     }
   }
 }
@@ -594,8 +597,6 @@ fn detect_removed_tag_component(
       continue;
     };
 
-    animation_state.frame_index =
-      artwork.get_initial_frame_index(&None, animation_state.temporary_direction);
     animation_state.current_tag = None;
 
     if let Some(frame_animation) = frame_animation {
@@ -605,9 +606,16 @@ fn detect_removed_tag_component(
         AnimationDirection::PingPong => AnimationDirection::Forward,
       };
 
+      animation_state.frame_index = artwork.get_initial_frame_index(
+        &animation_state.current_tag,
+        animation_state.temporary_direction,
+      );
       animation_state.current_direction = frame_animation.direction;
       animation_state.temporary_direction = initial_direction;
       animation_state.loop_count = 0;
+    } else {
+      animation_state.frame_index =
+        artwork.get_initial_frame_index(&animation_state.current_tag, AnimationDirection::Forward);
     }
   }
 }
