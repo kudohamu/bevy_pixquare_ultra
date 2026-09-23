@@ -9,7 +9,7 @@ use bevy::{
   reflect::TypePath,
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use pixquare::model::Artwork;
+use pixquare::Artwork;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -99,8 +99,8 @@ impl PxArtwork {
       .enumerate()
       .map(
         |(frame_index, frame)| -> Result<PxFrameMeta, PixquareLoaderError> {
-          let visible_layer_buf =
-            artwork.get_frame_image(frame_index, LayerVisibility::Visible.into())?;
+          let visible_layer_buf = artwork
+            .get_frame_image_as_straight_alpha(frame_index, LayerVisibility::Visible.into())?;
 
           let texture_format = if settings.is_srgb {
             TextureFormat::Rgba8UnormSrgb
@@ -124,7 +124,8 @@ impl PxArtwork {
             visible_layer_image,
           );
 
-          let all_layer_buf = artwork.get_frame_image(frame_index, LayerVisibility::All.into())?;
+          let all_layer_buf =
+            artwork.get_frame_image_as_straight_alpha(frame_index, LayerVisibility::All.into())?;
 
           let mut all_layer_image = Image::new(
             Extent3d {

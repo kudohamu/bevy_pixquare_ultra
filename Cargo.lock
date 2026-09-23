@@ -3281,9 +3281,9 @@ dependencies = [
 
 [[package]]
 name = "msgw3c"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c2459e0c0f6364dc2aff320b614a8493bcf6c0b78dd0c25f557ec7fe5fd9ad3"
+checksum = "1be99a851759cbb5824a9db75c94ff901f61d9e0cb0c2f5e433127f7d7508bf5"
 
 [[package]]
 name = "naga"
