@@ -314,33 +314,21 @@ fn initialize_pending_px_files(
   artworks: Res<Assets<PxArtwork>>,
 ) {
   for (entity, px_file, px_tag, frame_animation, mut px_state) in &mut q_px {
-    let Some(artwork) = artworks.get(&px_file.artwork) else {
+    let Some(px_artwork) = artworks.get(&px_file.artwork) else {
       continue;
     };
 
     let current_tag = px_tag.map_or(None, |tag| {
-      if artwork.is_valid_tag(&tag.0) {
+      if px_artwork.is_valid_tag(&tag.0) {
         return Some(tag.0.clone());
       }
       None
     });
 
     px_state.current_tag = current_tag;
-
-    let current_direction = frame_animation.map_or(AnimationDirection::Forward, |f| f.direction);
-    let initial_direction = match current_direction {
-      AnimationDirection::Forward => AnimationDirection::Forward,
-      AnimationDirection::Backward => AnimationDirection::Backward,
-      AnimationDirection::PingPong => AnimationDirection::Forward,
-    };
-
-    px_state.current_direction = current_direction;
-    px_state.temporary_direction = initial_direction;
     px_state.artwork_id = Some(px_file.artwork.id());
-    px_state.frame_index =
-      artwork.get_initial_frame_index(&px_state.current_tag, initial_direction);
-    px_state.loop_count = 0;
-    px_state.animation_timer = None;
+
+    reset_px_state(&mut px_state, px_artwork, frame_animation);
 
     commands.entity(entity).remove::<PendingPxInitialization>();
     commands.trigger(PixquareFileInitializedEvent(entity));
@@ -455,51 +443,34 @@ fn apply_image<T: RenderPx + Component<Mutability = Mutable>>(
 
 fn detect_added_animation_component(
   q_px: Query<
-    (
-      &PixquareFile,
-      Option<&PxTag>,
-      &PxFrameAnimation,
-      &mut PxState,
-    ),
+    (&PixquareFile, &PxFrameAnimation, &mut PxState),
     (Without<PendingPxInitialization>, Added<PxFrameAnimation>),
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
-  for (px_file, px_tag, frame_animation, mut px_state) in q_px {
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+  for (px_file, frame_animation, mut px_state) in q_px {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
       continue;
     };
 
-    let initial_direction = match frame_animation.direction {
-      AnimationDirection::Forward => AnimationDirection::Forward,
-      AnimationDirection::Backward => AnimationDirection::Backward,
-      AnimationDirection::PingPong => AnimationDirection::Forward,
-    };
-
-    px_state.current_direction = frame_animation.direction;
-    px_state.temporary_direction = initial_direction;
-    px_state.frame_index =
-      artwork.get_initial_frame_index(&px_tag.map(|t| t.0.clone()), initial_direction);
+    reset_px_state(&mut px_state, px_artwork, Some(frame_animation));
   }
 }
 
 fn detect_removed_animation_component(
   mut removed: RemovedComponents<PxFrameAnimation>,
-  mut q_px: Query<(&PixquareFile, Option<&PxTag>, &mut PxState), Without<PendingPxInitialization>>,
+  mut q_px: Query<(&PixquareFile, &mut PxState), Without<PendingPxInitialization>>,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for entity in removed.read() {
-    let Ok((px_file, px_tag, mut px_state)) = q_px.get_mut(entity) else {
+    let Ok((px_file, mut px_state)) = q_px.get_mut(entity) else {
       continue;
     };
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
       continue;
     };
 
-    px_state.frame_index =
-      artwork.get_initial_frame_index(&px_tag.map(|t| t.0.clone()), AnimationDirection::Forward);
-    px_state.current_direction = AnimationDirection::Forward;
-    px_state.temporary_direction = AnimationDirection::Forward;
+    reset_px_state(&mut px_state, px_artwork, None);
   }
 }
 
@@ -511,22 +482,12 @@ fn detect_updated_frame_animation_component(
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for (px_file, frame_animation, mut px_state) in q_px {
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
       continue;
     };
 
     if px_state.current_direction != frame_animation.direction {
-      let initial_direction = match frame_animation.direction {
-        AnimationDirection::Forward => AnimationDirection::Forward,
-        AnimationDirection::Backward => AnimationDirection::Backward,
-        AnimationDirection::PingPong => AnimationDirection::Forward,
-      };
-
-      px_state.current_direction = frame_animation.direction;
-      px_state.temporary_direction = initial_direction;
-      px_state.loop_count = 0;
-      px_state.frame_index =
-        artwork.get_initial_frame_index(&px_state.current_tag, px_state.temporary_direction);
+      reset_px_state(&mut px_state, px_artwork, Some(frame_animation));
     }
   }
 }
@@ -547,10 +508,10 @@ fn detect_added_or_updated_tag_component(
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for (px_file, px_tag, mut px_state, frame_animation) in q_px {
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
       continue;
     };
-    if !artwork.is_valid_tag(&px_tag.0) {
+    if !px_artwork.is_valid_tag(&px_tag.0) {
       continue;
     }
     if px_state
@@ -562,23 +523,7 @@ fn detect_added_or_updated_tag_component(
     }
 
     px_state.current_tag = Some(px_tag.0.clone());
-
-    if let Some(frame_animation) = frame_animation {
-      let initial_direction = match frame_animation.direction {
-        AnimationDirection::Forward => AnimationDirection::Forward,
-        AnimationDirection::Backward => AnimationDirection::Backward,
-        AnimationDirection::PingPong => AnimationDirection::Forward,
-      };
-
-      px_state.frame_index =
-        artwork.get_initial_frame_index(&px_state.current_tag, initial_direction);
-      px_state.current_direction = frame_animation.direction;
-      px_state.temporary_direction = initial_direction;
-      px_state.loop_count = 0;
-    } else {
-      px_state.frame_index =
-        artwork.get_initial_frame_index(&px_state.current_tag, AnimationDirection::Forward);
-    }
+    reset_px_state(&mut px_state, px_artwork, frame_animation);
   }
 }
 
@@ -591,31 +536,15 @@ fn detect_removed_tag_component(
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
   for entity in removed.read() {
-    let Ok((px_file, mut animation_state, frame_animation)) = q_px.get_mut(entity) else {
+    let Ok((px_file, mut px_state, frame_animation)) = q_px.get_mut(entity) else {
       continue;
     };
-    let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
+    let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
       continue;
     };
 
-    animation_state.current_tag = None;
-
-    if let Some(frame_animation) = frame_animation {
-      let initial_direction = match frame_animation.direction {
-        AnimationDirection::Forward => AnimationDirection::Forward,
-        AnimationDirection::Backward => AnimationDirection::Backward,
-        AnimationDirection::PingPong => AnimationDirection::Forward,
-      };
-
-      animation_state.frame_index =
-        artwork.get_initial_frame_index(&animation_state.current_tag, initial_direction);
-      animation_state.current_direction = frame_animation.direction;
-      animation_state.temporary_direction = initial_direction;
-      animation_state.loop_count = 0;
-    } else {
-      animation_state.frame_index =
-        artwork.get_initial_frame_index(&animation_state.current_tag, AnimationDirection::Forward);
-    }
+    px_state.current_tag = None;
+    reset_px_state(&mut px_state, px_artwork, frame_animation);
   }
 }
 
@@ -629,7 +558,7 @@ fn update_frame_index(
   time: Res<Time>,
 ) {
   for (entity, px_file, mut frame_animation, mut px_state) in q_px {
-    if frame_animation.play_state == AnimationPlayState::Paused {
+    if frame_animation.play_state != AnimationPlayState::Playing {
       continue;
     }
     let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
@@ -682,6 +611,9 @@ fn handle_advance_animation_frame_event(
   let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
     return;
   };
+  if frame_animation.play_state == AnimationPlayState::Stopped {
+    return;
+  }
 
   let is_loop_finished = advance_animation_frame(artwork, &mut frame_animation, &mut px_state);
 
@@ -695,11 +627,6 @@ fn advance_animation_frame(
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
 ) -> bool {
-  if frame_animation.loop_count != 0 && px_state.loop_count >= frame_animation.loop_count {
-    frame_animation.play_state = AnimationPlayState::Paused;
-    return false;
-  }
-
   let range = px_artwork.get_tag_range(&px_state.current_tag);
   let previous_frame_index = px_state.frame_index;
   let previous_direction = px_state.temporary_direction;
@@ -733,13 +660,17 @@ fn advance_animation_frame(
       previous_direction == AnimationDirection::Backward && next_frame_index == range.start
     }
   };
-  let is_loop_finished = is_single_frame || is_final_frame;
+  let is_animation_unit_ended = is_single_frame || is_final_frame;
 
-  if frame_animation.loop_count != 0 && is_loop_finished {
-    px_state.loop_count += 1;
+  if frame_animation.loop_count != 0 {
+    if is_animation_unit_ended {
+      px_state.loop_count += 1;
+    }
 
     if px_state.loop_count >= frame_animation.loop_count {
-      frame_animation.play_state = AnimationPlayState::Paused;
+      frame_animation.play_state = AnimationPlayState::Stopped;
+      reset_px_state(px_state, px_artwork, Some(frame_animation));
+
       return true;
     }
   }
@@ -824,6 +755,41 @@ fn cleanup_removed_px_atlas_name(
     };
     cache.dirty = true;
   }
+}
+
+fn get_initial_direction(frame_animation: Option<&PxFrameAnimation>) -> AnimationDirection {
+  let Some(frame_animation) = frame_animation else {
+    return AnimationDirection::Forward;
+  };
+
+  match frame_animation.direction {
+    AnimationDirection::Forward => AnimationDirection::Forward,
+    AnimationDirection::Backward => AnimationDirection::Backward,
+    AnimationDirection::PingPong => AnimationDirection::Forward,
+  }
+}
+
+fn get_initial_frame_index(
+  px_artwork: &PxArtwork,
+  frame_animation: Option<&PxFrameAnimation>,
+  px_state: &PxState,
+) -> u16 {
+  let initial_direction = get_initial_direction(frame_animation);
+
+  px_artwork.get_initial_frame_index(&px_state.current_tag, initial_direction)
+}
+
+fn reset_px_state(
+  px_state: &mut PxState,
+  px_artwork: &PxArtwork,
+  frame_animation: Option<&PxFrameAnimation>,
+) {
+  let initial_direction = get_initial_direction(frame_animation);
+  px_state.current_direction = frame_animation.map_or(AnimationDirection::Forward, |f| f.direction);
+  px_state.temporary_direction = initial_direction;
+  px_state.loop_count = 0;
+  px_state.frame_index = get_initial_frame_index(px_artwork, frame_animation, px_state);
+  px_state.animation_timer = None;
 }
 
 fn log_px_artwork_load_failures(mut failures: MessageReader<AssetLoadFailedEvent<PxArtwork>>) {
@@ -1743,7 +1709,7 @@ mod tests {
 
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 0);
-    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
     assert_eq!(
       app
         .world()
@@ -1758,7 +1724,7 @@ mod tests {
         .get::<PxFrameAnimation>()
         .unwrap()
         .play_state,
-      AnimationPlayState::Paused
+      AnimationPlayState::Stopped
     );
 
     app.update();
@@ -1795,7 +1761,7 @@ mod tests {
 
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 4);
-    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
     assert_eq!(
       app
         .world()
@@ -1810,7 +1776,7 @@ mod tests {
         .get::<PxFrameAnimation>()
         .unwrap()
         .play_state,
-      AnimationPlayState::Paused
+      AnimationPlayState::Stopped
     );
   }
 
@@ -1838,7 +1804,7 @@ mod tests {
 
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 5);
-    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
     assert_eq!(
       app
         .world()
@@ -1853,7 +1819,7 @@ mod tests {
         .get::<PxFrameAnimation>()
         .unwrap()
         .play_state,
-      AnimationPlayState::Paused
+      AnimationPlayState::Stopped
     );
   }
 
@@ -1888,7 +1854,7 @@ mod tests {
 
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 0);
-    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
     assert_eq!(
       app
         .world()
@@ -1903,7 +1869,7 @@ mod tests {
         .get::<PxFrameAnimation>()
         .unwrap()
         .play_state,
-      AnimationPlayState::Paused
+      AnimationPlayState::Stopped
     );
   }
 

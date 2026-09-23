@@ -11,6 +11,7 @@ impl AnimationDirection {
       pixquare::composite_type::AnimationDirection::Forward => Self::Forward,
       pixquare::composite_type::AnimationDirection::Backward => Self::Backward,
       pixquare::composite_type::AnimationDirection::PingPong => Self::PingPong,
+      pixquare::composite_type::AnimationDirection::Unknown(_) => Self::PingPong,
     }
   }
 }
@@ -19,6 +20,7 @@ impl AnimationDirection {
 pub enum AnimationPlayState {
   Playing,
   Paused,
+  Stopped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
