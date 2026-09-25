@@ -88,6 +88,26 @@ impl PxArtwork {
     }
   }
 
+  pub fn get_loop_count_by_tag(&self, tag: &str) -> Option<u16> {
+    let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
+      warn!("tag: `{}` is not found", tag);
+
+      return None;
+    };
+
+    Some(tag.loop_count)
+  }
+
+  pub fn get_animation_direction_by_tag(&self, tag: &str) -> Option<AnimationDirection> {
+    let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
+      warn!("tag: `{}` is not found", tag);
+
+      return None;
+    };
+
+    Some(tag.direction)
+  }
+
   pub(crate) fn from_artwork(
     artwork: &Artwork,
     settings: &PixquareLoaderSettings,

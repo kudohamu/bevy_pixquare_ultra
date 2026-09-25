@@ -63,8 +63,8 @@ impl AsAssetId for PixquareFile {
 #[derive(Debug, Component)]
 pub struct PxFrameAnimation {
   pub duration: Option<f32>,
-  pub direction: AnimationDirection,
-  pub loop_count: u16,
+  pub direction: Option<AnimationDirection>,
+  pub loop_count: Option<u16>,
   pub play_state: AnimationPlayState,
 }
 
@@ -72,8 +72,8 @@ impl Default for PxFrameAnimation {
   fn default() -> Self {
     Self {
       duration: None,
-      direction: AnimationDirection::Forward,
-      loop_count: 0,
+      direction: None,
+      loop_count: None,
       play_state: AnimationPlayState::Playing,
     }
   }
@@ -486,7 +486,12 @@ fn detect_updated_frame_animation_component(
       continue;
     };
 
-    if px_state.current_direction != frame_animation.direction {
+    let default_direction = px_state
+      .current_tag
+      .as_ref()
+      .and_then(|tag| px_artwork.get_animation_direction_by_tag(tag))
+      .unwrap_or(AnimationDirection::Forward);
+    if px_state.current_direction != frame_animation.direction.unwrap_or(default_direction) {
       reset_px_state(&mut px_state, px_artwork, Some(frame_animation));
     }
   }
@@ -662,12 +667,19 @@ fn advance_animation_frame(
   };
   let is_animation_unit_ended = is_single_frame || is_final_frame;
 
-  if frame_animation.loop_count != 0 {
+  let default_loop_count = px_state
+    .current_tag
+    .as_ref()
+    .and_then(|tag| px_artwork.get_loop_count_by_tag(tag))
+    .unwrap_or(0);
+  let max_loop_count = frame_animation.loop_count.unwrap_or(default_loop_count);
+
+  if max_loop_count != 0 {
     if is_animation_unit_ended {
       px_state.loop_count += 1;
     }
 
-    if px_state.loop_count >= frame_animation.loop_count {
+    if px_state.loop_count >= max_loop_count {
       frame_animation.play_state = AnimationPlayState::Stopped;
       reset_px_state(px_state, px_artwork, Some(frame_animation));
 
@@ -757,12 +769,22 @@ fn cleanup_removed_px_atlas_name(
   }
 }
 
-fn get_initial_direction(frame_animation: Option<&PxFrameAnimation>) -> AnimationDirection {
+fn get_initial_direction(
+  px_artwork: &PxArtwork,
+  frame_animation: Option<&PxFrameAnimation>,
+  px_state: &PxState,
+) -> AnimationDirection {
   let Some(frame_animation) = frame_animation else {
     return AnimationDirection::Forward;
   };
+  let default_direction = px_state
+    .current_tag
+    .as_ref()
+    .and_then(|tag| px_artwork.get_animation_direction_by_tag(tag))
+    .unwrap_or(AnimationDirection::Forward);
+  let direction = frame_animation.direction.unwrap_or(default_direction);
 
-  match frame_animation.direction {
+  match direction {
     AnimationDirection::Forward => AnimationDirection::Forward,
     AnimationDirection::Backward => AnimationDirection::Backward,
     AnimationDirection::PingPong => AnimationDirection::Forward,
@@ -774,7 +796,7 @@ fn get_initial_frame_index(
   frame_animation: Option<&PxFrameAnimation>,
   px_state: &PxState,
 ) -> u16 {
-  let initial_direction = get_initial_direction(frame_animation);
+  let initial_direction = get_initial_direction(px_artwork, frame_animation, px_state);
 
   px_artwork.get_initial_frame_index(&px_state.current_tag, initial_direction)
 }
@@ -784,8 +806,15 @@ fn reset_px_state(
   px_artwork: &PxArtwork,
   frame_animation: Option<&PxFrameAnimation>,
 ) {
-  let initial_direction = get_initial_direction(frame_animation);
-  px_state.current_direction = frame_animation.map_or(AnimationDirection::Forward, |f| f.direction);
+  let initial_direction = get_initial_direction(px_artwork, frame_animation, px_state);
+  let default_direction = px_state
+    .current_tag
+    .as_ref()
+    .and_then(|tag| px_artwork.get_animation_direction_by_tag(tag))
+    .unwrap_or(AnimationDirection::Forward);
+  px_state.current_direction = frame_animation
+    .and_then(|f| f.direction)
+    .unwrap_or(default_direction);
   px_state.temporary_direction = initial_direction;
   px_state.loop_count = 0;
   px_state.frame_index = get_initial_frame_index(px_artwork, frame_animation, px_state);
@@ -960,7 +989,7 @@ mod tests {
       .entity_mut(entity)
       .get_mut::<PxFrameAnimation>()
       .unwrap()
-      .direction = direction;
+      .direction = Some(direction);
   }
 
   fn set_frame_index(app: &mut App, entity: Entity, frame_index: u16) {
@@ -1171,7 +1200,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        loop_count: 0,
+        loop_count: None,
         ..Default::default()
       });
     app.update();
@@ -1194,7 +1223,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        loop_count: 0,
+        loop_count: None,
         ..Default::default()
       });
     app.update();
@@ -1222,8 +1251,8 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Backward,
-        loop_count: 0,
+        direction: Some(AnimationDirection::Backward),
+        loop_count: None,
         ..Default::default()
       });
 
@@ -1253,8 +1282,8 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Backward,
-        loop_count: 0,
+        direction: Some(AnimationDirection::Backward),
+        loop_count: None,
         ..Default::default()
       });
 
@@ -1282,8 +1311,8 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::PingPong,
-        loop_count: 0,
+        direction: Some(AnimationDirection::PingPong),
+        loop_count: None,
         ..Default::default()
       });
 
@@ -1315,8 +1344,8 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::PingPong,
-        loop_count: 0,
+        direction: Some(AnimationDirection::PingPong),
+        loop_count: None,
         ..Default::default()
       });
 
@@ -1348,8 +1377,8 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::PingPong,
-        loop_count: 0,
+        direction: Some(AnimationDirection::PingPong),
+        loop_count: None,
         ..Default::default()
       });
 
@@ -1368,7 +1397,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1391,7 +1420,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Backward,
+        direction: Some(AnimationDirection::Backward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1414,7 +1443,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::PingPong,
+        direction: Some(AnimationDirection::PingPong),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1437,7 +1466,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1461,7 +1490,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Backward,
+        direction: Some(AnimationDirection::Backward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1485,7 +1514,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::PingPong,
+        direction: Some(AnimationDirection::PingPong),
         play_state: AnimationPlayState::Playing,
         ..default()
       });
@@ -1523,7 +1552,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Playing,
         ..default()
       });
@@ -1545,7 +1574,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1574,7 +1603,7 @@ mod tests {
     app.world_mut().entity_mut(entity).insert((
       PxTag::new("front_move".into()),
       PxFrameAnimation {
-        direction: AnimationDirection::PingPong,
+        direction: Some(AnimationDirection::PingPong),
         play_state: AnimationPlayState::Paused,
         ..default()
       },
@@ -1598,7 +1627,7 @@ mod tests {
     app.world_mut().entity_mut(entity).insert((
       PxTag::new("front_move".into()),
       PxFrameAnimation {
-        direction: AnimationDirection::PingPong,
+        direction: Some(AnimationDirection::PingPong),
         play_state: AnimationPlayState::Paused,
         ..default()
       },
@@ -1626,7 +1655,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Playing,
         ..default()
       });
@@ -1655,7 +1684,7 @@ mod tests {
       .unwrap()
       .insert(PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
+        direction: Some(AnimationDirection::Forward),
         play_state: AnimationPlayState::Paused,
         ..default()
       });
@@ -1698,7 +1727,7 @@ mod tests {
       .add_observer(observe_animation_loop_finished_event);
     app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
       duration: Some(FRAME_DURATION.as_secs_f32()),
-      loop_count: 1,
+      loop_count: Some(1),
       ..default()
     });
 
@@ -1747,8 +1776,8 @@ mod tests {
       PxTag::new("front_move".into()),
       PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Forward,
-        loop_count: 1,
+        direction: Some(AnimationDirection::Forward),
+        loop_count: Some(1),
         play_state: AnimationPlayState::Paused,
       },
     ));
@@ -1790,8 +1819,8 @@ mod tests {
       PxTag::new("front_move".into()),
       PxFrameAnimation {
         duration: Some(FRAME_DURATION.as_secs_f32()),
-        direction: AnimationDirection::Backward,
-        loop_count: 1,
+        direction: Some(AnimationDirection::Backward),
+        loop_count: Some(1),
         play_state: AnimationPlayState::Paused,
       },
     ));
@@ -1831,8 +1860,8 @@ mod tests {
       .add_observer(observe_animation_loop_finished_event);
     app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
       duration: Some(FRAME_DURATION.as_secs_f32()),
-      direction: AnimationDirection::PingPong,
-      loop_count: 1,
+      direction: Some(AnimationDirection::PingPong),
+      loop_count: Some(1),
       play_state: AnimationPlayState::Paused,
     });
     app.update();
@@ -2032,5 +2061,172 @@ mod tests {
     let sprite = app.world().entity(entity).get::<Sprite>().unwrap();
     assert_eq!(sprite.image, expected_image);
     assert!(sprite.texture_atlas.is_none());
+  }
+
+  #[test]
+  fn test_uses_tag_loop_count_when_animation_loop_count_is_unspecified() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("back_move".into()),
+      PxFrameAnimation {
+        duration: Some(FRAME_DURATION.as_secs_f32()),
+        direction: Some(AnimationDirection::Forward),
+        loop_count: None,
+        play_state: AnimationPlayState::Paused,
+      },
+    ));
+    app.update();
+
+    assert_eq!(
+      get_px_artwork(&app, entity).get_loop_count_by_tag("back_move"),
+      Some(3)
+    );
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+
+    app.update();
+    app.update();
+    assert_eq!(get_px_state(&app, entity).loop_count, 1);
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Playing
+    );
+
+    app.update();
+    app.update();
+    assert_eq!(get_px_state(&app, entity).loop_count, 2);
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Playing
+    );
+
+    app.update();
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Stopped
+    );
+    assert_eq!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0,
+      vec![entity]
+    );
+  }
+
+  #[test]
+  fn test_uses_infinite_loop_when_animation_loop_count_and_tag_are_unspecified() {
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
+    app
+      .init_resource::<ObservedAnimationLoopFinishedEvents>()
+      .add_observer(observe_animation_loop_finished_event);
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: Some(FRAME_DURATION.as_secs_f32()),
+      direction: Some(AnimationDirection::Forward),
+      loop_count: None,
+      play_state: AnimationPlayState::Paused,
+    });
+    app.update();
+
+    let frame_count = get_px_artwork(&app, entity).frame_count();
+    assert!(get_px_state(&app, entity).current_tag.is_none());
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+    for _ in 0..frame_count * 2 {
+      app.update();
+    }
+
+    assert_eq!(get_px_state(&app, entity).frame_index, 0);
+    assert_eq!(get_px_state(&app, entity).loop_count, 0);
+    assert_eq!(
+      app
+        .world()
+        .entity(entity)
+        .get::<PxFrameAnimation>()
+        .unwrap()
+        .play_state,
+      AnimationPlayState::Playing
+    );
+    assert!(
+      app
+        .world()
+        .resource::<ObservedAnimationLoopFinishedEvents>()
+        .0
+        .is_empty()
+    );
+  }
+
+  #[test]
+  fn test_uses_tag_direction_when_animation_direction_is_unspecified() {
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
+
+    app.world_mut().entity_mut(entity).insert((
+      PxTag::new("back_move".into()),
+      PxFrameAnimation {
+        duration: Some(FRAME_DURATION.as_secs_f32()),
+        direction: None,
+        loop_count: Some(0),
+        play_state: AnimationPlayState::Paused,
+      },
+    ));
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert_eq!(
+      get_px_artwork(&app, entity).get_animation_direction_by_tag("back_move"),
+      Some(AnimationDirection::Backward)
+    );
+    assert_eq!(state.frame_index, 2);
+    assert_eq!(state.current_direction, AnimationDirection::Backward);
+    assert_eq!(state.temporary_direction, AnimationDirection::Backward);
+
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 2);
+  }
+
+  #[test]
+  fn test_uses_forward_direction_when_animation_direction_and_tag_are_unspecified() {
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: Some(FRAME_DURATION.as_secs_f32()),
+      direction: None,
+      loop_count: Some(0),
+      play_state: AnimationPlayState::Paused,
+    });
+    app.update();
+
+    let state = get_px_state(&app, entity);
+    assert!(state.current_tag.is_none());
+    assert_eq!(state.frame_index, 0);
+    assert_eq!(state.current_direction, AnimationDirection::Forward);
+    assert_eq!(state.temporary_direction, AnimationDirection::Forward);
+
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+    app.update();
+    assert_eq!(get_px_state(&app, entity).frame_index, 1);
   }
 }
