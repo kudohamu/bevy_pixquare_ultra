@@ -29,7 +29,10 @@ use bevy::pbr::{Material, MeshMaterial3d};
 
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState, LayerVisibility},
-  event::{AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent},
+  event::{
+    AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent,
+    RestartFrameAnimationEvent,
+  },
   loader::PxArtwork,
 };
 
@@ -627,6 +630,25 @@ fn handle_advance_animation_frame_event(
   }
 }
 
+fn handle_restart_frame_animation_event(
+  trigger: On<RestartFrameAnimationEvent>,
+  mut q_px: Query<
+    (&PixquareFile, &mut PxFrameAnimation, &mut PxState),
+    Without<PendingPxInitialization>,
+  >,
+  res_pxartworks: Res<Assets<PxArtwork>>,
+) {
+  let Ok((px_file, mut frame_animation, mut px_state)) = q_px.get_mut(trigger.0) else {
+    return;
+  };
+  let Some(px_artwork) = res_pxartworks.get(&px_file.artwork) else {
+    return;
+  };
+
+  reset_px_state(&mut px_state, px_artwork, Some(&frame_animation));
+  frame_animation.play_state = AnimationPlayState::Playing;
+}
+
 fn advance_animation_frame(
   px_artwork: &PxArtwork,
   frame_animation: &mut PxFrameAnimation,
@@ -872,7 +894,8 @@ impl Plugin for PixquareRendererPlugin {
             .chain(),
         ),
       )
-      .add_observer(handle_advance_animation_frame_event);
+      .add_observer(handle_advance_animation_frame_event)
+      .add_observer(handle_restart_frame_animation_event);
   }
 }
 
@@ -2228,5 +2251,54 @@ mod tests {
     set_play_state(&mut app, entity, AnimationPlayState::Playing);
     app.update();
     assert_eq!(get_px_state(&app, entity).frame_index, 1);
+  }
+
+  #[test]
+  fn test_restart_animation_when_restart_frame_animation_event_fired() {
+    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+
+    app
+      .world_mut()
+      .get_entity_mut(entity)
+      .unwrap()
+      .insert(PxFrameAnimation {
+        duration: Some(FRAME_DURATION.as_secs_f32()),
+        direction: Some(AnimationDirection::Forward),
+        loop_count: None,
+        ..Default::default()
+      });
+    app.update();
+
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PxState>()
+      .unwrap()
+      .loop_count = 2;
+    app.update();
+
+    app
+      .world_mut()
+      .entity_mut(entity)
+      .get_mut::<PxFrameAnimation>()
+      .unwrap()
+      .play_state = AnimationPlayState::Paused;
+    let state = app.world().entity(entity).get::<PxState>().unwrap();
+
+    assert_eq!(state.frame_index, 2);
+    assert_eq!(state.loop_count, 2);
+
+    app.world_mut().trigger(RestartFrameAnimationEvent(entity));
+
+    let state = app.world().entity(entity).get::<PxState>().unwrap();
+    assert_eq!(state.frame_index, 0);
+    assert_eq!(state.loop_count, 0);
+
+    let frame_animation = app
+      .world()
+      .entity(entity)
+      .get::<PxFrameAnimation>()
+      .unwrap();
+    assert_eq!(frame_animation.play_state, AnimationPlayState::Playing);
   }
 }

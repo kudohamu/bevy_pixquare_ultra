@@ -8,3 +8,6 @@ pub struct AnimationLoopFinishedEvent(pub Entity);
 
 #[derive(Debug, Event)]
 pub struct AdvanceAnimationFrameEvent(pub Entity);
+
+#[derive(Debug, Event)]
+pub struct RestartFrameAnimationEvent(pub Entity);
