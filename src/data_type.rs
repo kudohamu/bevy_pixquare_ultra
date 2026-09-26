@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationDirection {
   Forward,
@@ -45,4 +47,10 @@ impl std::fmt::Display for LayerVisibility {
       Self::All => write!(f, "all"),
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameStep {
+  Fixed(u16),
+  Delta(Duration),
 }

@@ -48,7 +48,7 @@ fn advance_animation_frame(
 ) {
   if inputs.just_pressed(MouseButton::Left) {
     for entity in q_px {
-      commands.trigger(AdvanceAnimationFrameEvent(entity));
+      commands.trigger(AdvanceAnimationFrameEvent::new(entity));
     }
   }
 }

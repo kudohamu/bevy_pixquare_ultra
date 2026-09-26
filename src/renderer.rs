@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{
   app::{App, Plugin, PostUpdate},
   asset::{AsAssetId, AssetId, AssetLoadFailedEvent, Assets, Handle},
@@ -20,7 +22,7 @@ use bevy::{
   prelude::AssetChanged,
   sprite::Sprite,
   sprite_render::{Material2d, MeshMaterial2d, SpriteSystems},
-  time::{Time, Timer, TimerMode},
+  time::Time,
   ui::{UiSystems, widget::ImageNode},
 };
 
@@ -28,7 +30,7 @@ use bevy::{
 use bevy::pbr::{Material, MeshMaterial3d};
 
 use crate::{
-  data_type::{AnimationDirection, AnimationPlayState, LayerVisibility},
+  data_type::{AnimationDirection, AnimationPlayState, FrameStep, LayerVisibility},
   event::{
     AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent,
     RestartFrameAnimationEvent,
@@ -98,7 +100,7 @@ pub struct PxState {
   pub(crate) _current_direction: AnimationDirection,
   pub(crate) temporary_direction: AnimationDirection,
   pub(crate) loop_count: u16,
-  pub(crate) animation_timer: Option<Timer>,
+  pub(crate) surplus_delta: Duration,
   pub(crate) _current_tag: Option<String>,
 }
 
@@ -110,7 +112,7 @@ impl Default for PxState {
       _current_direction: AnimationDirection::Forward,
       temporary_direction: AnimationDirection::Forward,
       loop_count: 0,
-      animation_timer: None,
+      surplus_delta: Duration::from_secs(0),
       _current_tag: None,
     }
   }
@@ -609,33 +611,15 @@ fn update_frame_index(
       continue;
     };
 
-    let timer = match px_state.animation_timer.as_mut() {
-      Some(timer) => timer,
-      None => {
-        let Some(default_frame_duration) = artwork.frame_duration(px_state.frame_index as usize)
-        else {
-          continue;
-        };
-        let timer = Timer::from_seconds(
-          frame_animation
-            .duration
-            .unwrap_or(default_frame_duration.as_secs_f32()),
-          TimerMode::Once,
-        );
-        px_state.animation_timer = Some(timer);
+    let is_loop_finished = advance_animation_frame(
+      artwork,
+      &mut frame_animation,
+      &mut px_state,
+      FrameStep::Delta(time.delta()),
+    );
 
-        px_state.animation_timer.as_mut().unwrap()
-      }
-    };
-
-    timer.tick(time.delta());
-
-    if timer.just_finished() {
-      let is_loop_finished = advance_animation_frame(artwork, &mut frame_animation, &mut px_state);
-
-      if is_loop_finished {
-        commands.trigger(AnimationLoopFinishedEvent(entity));
-      }
+    if is_loop_finished {
+      commands.trigger(AnimationLoopFinishedEvent(entity));
     }
   }
 }
@@ -649,7 +633,8 @@ fn handle_advance_animation_frame_event(
   >,
   res_pxartworks: Res<Assets<PxArtwork>>,
 ) {
-  let Ok((entity, px_file, mut frame_animation, mut px_state)) = q_px.get_mut(trigger.0) else {
+  let Ok((entity, px_file, mut frame_animation, mut px_state)) = q_px.get_mut(trigger.entity)
+  else {
     return;
   };
   let Some(artwork) = res_pxartworks.get(&px_file.artwork) else {
@@ -659,7 +644,8 @@ fn handle_advance_animation_frame_event(
     return;
   }
 
-  let is_loop_finished = advance_animation_frame(artwork, &mut frame_animation, &mut px_state);
+  let is_loop_finished =
+    advance_animation_frame(artwork, &mut frame_animation, &mut px_state, trigger.step);
 
   if is_loop_finished {
     commands.trigger(AnimationLoopFinishedEvent(entity));
@@ -689,13 +675,62 @@ fn advance_animation_frame(
   px_artwork: &PxArtwork,
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
+  step: FrameStep,
+) -> bool {
+  match step {
+    FrameStep::Fixed(step_count) => {
+      for _ in 0..step_count {
+        if advance_one_frame(px_artwork, frame_animation, px_state) {
+          return true;
+        }
+      }
+    }
+    FrameStep::Delta(delta_value) => {
+      px_state.surplus_delta += delta_value;
+      let Some(frame_duration) = px_artwork.frame_duration(px_state.frame_index as usize) else {
+        return true;
+      };
+      let mut next_duration = Duration::from_secs_f32(
+        frame_animation
+          .duration
+          .unwrap_or(frame_duration.as_secs_f32()),
+      );
+
+      while px_state.surplus_delta >= next_duration {
+        if next_duration.is_zero() {
+          return false;
+        }
+        px_state.surplus_delta = px_state.surplus_delta.saturating_sub(next_duration);
+
+        if advance_one_frame(px_artwork, frame_animation, px_state) {
+          return true;
+        }
+
+        let Some(frame_duration) = px_artwork.frame_duration(px_state.frame_index as usize) else {
+          return true;
+        };
+        next_duration = Duration::from_secs_f32(
+          frame_animation
+            .duration
+            .unwrap_or(frame_duration.as_secs_f32()),
+        );
+      }
+    }
+  }
+
+  false
+}
+
+fn advance_one_frame(
+  px_artwork: &PxArtwork,
+  frame_animation: &mut PxFrameAnimation,
+  px_state: &mut PxState,
 ) -> bool {
   let range = px_artwork.get_tag_range(&px_state._current_tag);
   let previous_frame_index = px_state.frame_index;
   let previous_direction = px_state.temporary_direction;
   let next_frame_index = px_state.next_frame(&px_artwork);
   px_state.frame_index = next_frame_index;
-  px_state.animation_timer = None;
 
   if px_state._current_direction == AnimationDirection::PingPong {
     if px_state.temporary_direction == AnimationDirection::Forward
@@ -876,7 +911,7 @@ fn reset_px_state(
   px_state.temporary_direction = initial_direction;
   px_state.loop_count = 0;
   px_state.frame_index = get_initial_frame_index(px_artwork, frame_animation, px_state);
-  px_state.animation_timer = None;
+  px_state.surplus_delta = Duration::ZERO;
 }
 
 fn log_px_artwork_load_failures(mut failures: MessageReader<AssetLoadFailedEvent<PxArtwork>>) {
@@ -1989,15 +2024,6 @@ mod tests {
 
     let px_state = get_px_state(&app, entity);
     assert_eq!(px_state.frame_index, 0);
-    assert!(
-      px_state
-        .animation_timer
-        .as_ref()
-        .unwrap()
-        .duration()
-        .abs_diff(px_frame_duration)
-        < Duration::from_micros(1)
-    );
 
     *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
       TimeUpdateStrategy::ManualDuration(margin * 2);
@@ -2392,5 +2418,28 @@ mod tests {
       .unwrap();
     app.update();
     assert!(get_px_state(&app, entity).is_initialized());
+  }
+
+  #[test]
+  fn test_advances_multiple_frames_when_delta_spans_multiple_frame_durations() {
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
+    let frame_duration = Duration::from_millis(50);
+    app.world_mut().entity_mut(entity).insert(PxFrameAnimation {
+      duration: Some(frame_duration.as_secs_f32()),
+      direction: Some(AnimationDirection::Forward),
+      loop_count: Some(0),
+      play_state: AnimationPlayState::Paused,
+    });
+    app.update();
+    assert_eq!(get_px_state(&app, entity).current_frame(), 0);
+    assert!(get_px_artwork(&app, entity).frame_count() > 3);
+
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(
+      frame_duration * 3 + Duration::from_millis(1),
+    ));
+    set_play_state(&mut app, entity, AnimationPlayState::Playing);
+    app.update();
+
+    assert_eq!(get_px_state(&app, entity).current_frame(), 3);
   }
 }
