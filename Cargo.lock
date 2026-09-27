@@ -3897,6 +3897,8 @@ dependencies = [
 [[package]]
 name = "pixquare-io"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94c507644692fb189976ba9c7e675694fc1818dff79d3b41a3f5fa523c819cf8"
 dependencies = [
  "flate2",
  "half",

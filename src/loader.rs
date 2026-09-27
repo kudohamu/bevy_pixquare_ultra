@@ -82,9 +82,7 @@ impl PxArtwork {
 
         tag.start_index..(tag.end_index + 1)
       }
-      None => {
-        return 0..self.frames.len() as u16;
-      }
+      None => 0..self.frames.len() as u16,
     }
   }
 

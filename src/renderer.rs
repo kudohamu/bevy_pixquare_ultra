@@ -223,9 +223,7 @@ pub(crate) struct PxAtlasMeta {
 
 impl PxAtlasMeta {
   fn get_texture_atlas(&self, name: &str) -> Option<TextureAtlas> {
-    let Some(index) = self.atlas_indices.get(name) else {
-      return None;
-    };
+    let index = self.atlas_indices.get(name)?;
 
     Some(TextureAtlas {
       layout: self.atlas_layout.clone(),
@@ -358,7 +356,7 @@ fn initialize_pending_px_files(
       continue;
     };
 
-    let current_tag = px_tag.map_or(None, |tag| {
+    let current_tag = px_tag.and_then(|tag| {
       if px_artwork.is_valid_tag(&tag.0) {
         return Some(tag.0.clone());
       }
@@ -729,7 +727,7 @@ fn advance_one_frame(
   let range = px_artwork.get_tag_range(&px_state._current_tag);
   let previous_frame_index = px_state.frame_index;
   let previous_direction = px_state.temporary_direction;
-  let next_frame_index = px_state.next_frame(&px_artwork);
+  let next_frame_index = px_state.next_frame(px_artwork);
   px_state.frame_index = next_frame_index;
 
   if px_state._current_direction == AnimationDirection::PingPong {
@@ -780,7 +778,7 @@ fn advance_one_frame(
     }
   }
 
-  return false;
+  false
 }
 
 fn initialize_px_atlas(
