@@ -31,7 +31,7 @@ pub fn encode_image(codec: ImageCodec, image: &Image) -> Result<Vec<u8>, Pixquar
   match codec {
     ImageCodec::Qoi => {
       QoiEncoder::new(&mut buf).write_image(
-        &image_data,
+        image_data,
         image_width,
         image_height,
         ExtendedColorType::Rgba8,

@@ -1056,9 +1056,8 @@ mod tests {
   fn get_px_artwork(app: &App, entity: Entity) -> &PxArtwork {
     let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
     let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
-    let px_artwork = &res_pxartwork.get(&px_file.artwork).unwrap();
 
-    return px_artwork;
+    res_pxartwork.get(&px_file.artwork).unwrap()
   }
 
   fn get_px_state(app: &App, entity: Entity) -> &PxState {
@@ -1154,7 +1153,7 @@ mod tests {
       .get(&atlas.layout)?
       .textures
       .get(atlas.index)
-      .map(|t| *t)
+      .copied()
   }
 
   #[test]
@@ -1187,7 +1186,7 @@ mod tests {
 
   #[test]
   fn test_does_not_reinitialize_when_layer_visibility_changes() {
-    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+    let (mut app, entity) = create_px_file_app("assets/orange.px");
     app.update();
 
     set_frame_index(&mut app, entity, 3);
@@ -1214,7 +1213,7 @@ mod tests {
 
   #[test]
   fn test_reinitializes_after_artwork_handle_changes() {
-    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+    let (mut app, entity) = create_px_file_app("assets/orange.px");
     app.update();
     set_frame_index(&mut app, entity, 3);
 
@@ -1294,7 +1293,7 @@ mod tests {
 
   #[test]
   fn test_advances_to_next_frame_when_entity_has_px_animation_frame_component() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     app
       .world_mut()
@@ -1312,7 +1311,7 @@ mod tests {
 
   #[test]
   fn test_wraps_to_first_frame_when_current_frame_is_last() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     let px_file = app.world().entity(entity).get::<PixquareFile>().unwrap();
     let res_pxartwork = app.world().get_resource::<Assets<PxArtwork>>().unwrap();
@@ -1345,7 +1344,7 @@ mod tests {
 
   #[test]
   fn test_advance_to_previous_frame_when_direction_is_backward() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     app
       .world_mut()
@@ -1376,7 +1375,7 @@ mod tests {
 
   #[test]
   fn test_wraps_to_last_frame_when_direction_is_backward_and_current_frame_is_first() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     app
       .world_mut()
@@ -1402,7 +1401,7 @@ mod tests {
 
   #[test]
   fn test_reverses_to_backward_at_last_frame_when_direction_is_ping_pong() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     let px_artwork = get_px_artwork(&app, entity);
     let frames_len = px_artwork.frame_count() as u16;
@@ -1438,7 +1437,7 @@ mod tests {
 
   #[test]
   fn test_reverses_to_forward_at_first_frame_when_direction_is_ping_pong() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     app
       .world_mut()
@@ -1471,7 +1470,7 @@ mod tests {
 
   #[test]
   fn test_stays_on_first_frame_when_ping_pong_artwork_has_one_frame() {
-    let (mut app, entity) = create_px_file_app(&"assets/orange.px");
+    let (mut app, entity) = create_px_file_app("assets/orange.px");
 
     app
       .world_mut()
@@ -1492,7 +1491,7 @@ mod tests {
 
   #[test]
   fn test_starts_at_tag_first_frame_when_tag_direction_is_forward() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1515,7 +1514,7 @@ mod tests {
 
   #[test]
   fn test_starts_at_tag_last_frame_when_tag_direction_is_backward() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1538,7 +1537,7 @@ mod tests {
 
   #[test]
   fn test_starts_at_tag_first_frame_when_tag_direction_is_ping_pong() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1561,7 +1560,7 @@ mod tests {
 
   #[test]
   fn test_wraps_to_tag_first_frame_when_tag_direction_is_forward() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1585,7 +1584,7 @@ mod tests {
 
   #[test]
   fn test_wraps_to_tag_last_frame_when_tag_direction_is_backward() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1609,7 +1608,7 @@ mod tests {
 
   #[test]
   fn test_reverses_at_tag_last_frame_when_tag_direction_is_ping_pong() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     app
       .world_mut()
       .get_entity_mut(entity)
@@ -1646,7 +1645,7 @@ mod tests {
 
   #[test]
   fn test_stays_on_single_frame_tag() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     set_tag(&mut app, entity, Some("front".into()));
     app
       .world_mut()
@@ -1668,7 +1667,7 @@ mod tests {
 
   #[test]
   fn test_resets_animation_status_when_switching_to_valid_tag() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     set_tag(&mut app, entity, Some("front_move".into()));
     app
       .world_mut()
@@ -1749,7 +1748,7 @@ mod tests {
 
   #[test]
   fn test_preserves_active_tag_and_status_when_switching_to_missing_tag() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     set_tag(&mut app, entity, Some("front_move".into()));
     app
       .world_mut()
@@ -1778,7 +1777,7 @@ mod tests {
 
   #[test]
   fn test_uses_all_frames_when_missing_tag_is_selected_without_active_tag() {
-    let (mut app, entity) = create_px_file_app(&"assets/character_move.px");
+    let (mut app, entity) = create_px_file_app("assets/character_move.px");
     set_tag(&mut app, entity, None);
     app
       .world_mut()
@@ -2006,7 +2005,7 @@ mod tests {
 
   #[test]
   fn test_uses_px_frame_duration_when_animation_duration_is_none() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
     let px_frame_duration = *get_px_artwork(&app, entity).frame_duration(0).unwrap();
     let margin = Duration::from_millis(1);
     let duration_before_frame_advance = px_frame_duration.checked_sub(margin).unwrap();
@@ -2325,7 +2324,7 @@ mod tests {
 
   #[test]
   fn test_restart_animation_when_restart_frame_animation_event_fired() {
-    let (mut app, entity) = create_px_file_app(&"assets/balloon.px");
+    let (mut app, entity) = create_px_file_app("assets/balloon.px");
 
     app
       .world_mut()

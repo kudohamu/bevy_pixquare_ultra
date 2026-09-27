@@ -103,7 +103,6 @@ fn setup(
       PixquareFile {
         artwork: asset_server.load("balloon.px"),
         layer_visibility: LayerVisibility::All,
-        ..default()
       },
       PxFrameAnimation::default(),
       MeshMaterial3d(material.clone()),
