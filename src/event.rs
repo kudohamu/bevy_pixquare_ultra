@@ -6,7 +6,16 @@ use crate::data_type::FrameStep;
 #[derive(Debug, Event)]
 pub struct PixquareFileInitializedEvent(pub Entity);
 
-/// Event that fires animation loop finished.
+/// Event that fires each time one animation loop finished.
+#[derive(Debug, Event)]
+pub struct AnimationLoopFinishedEvent {
+  /// Triggered entity.
+  pub entity: Entity,
+  /// Usually 1 in most cases, but may exceed 2 if extreme update delays occur due to performance degradation.
+  pub finished_loop_count: u16,
+}
+
+/// Event that fires animation finished.
 /// This event is fired when the number of loops reaches loop_count.
 #[derive(Debug, Event)]
 pub struct AnimationFinishedEvent(pub Entity);

@@ -32,8 +32,8 @@ use bevy::pbr::{Material, MeshMaterial3d};
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState, FrameStep, LayerVisibility},
   event::{
-    AdvanceAnimationFrameEvent, AnimationFinishedEvent, PixquareFileInitializedEvent,
-    RestartFrameAnimationEvent,
+    AdvanceAnimationFrameEvent, AnimationFinishedEvent, AnimationLoopFinishedEvent,
+    PixquareFileInitializedEvent, RestartFrameAnimationEvent,
   },
   loader::PxArtwork,
 };
@@ -779,14 +779,20 @@ fn update_frame_index(
       continue;
     };
 
-    let is_animation_finished = advance_animation_frame(
+    let advanced_result = advance_animation_frame(
       artwork,
       &mut frame_animation,
       &mut px_state,
       FrameStep::Delta(time.delta()),
     );
 
-    if is_animation_finished {
+    if advanced_result.loop_finished_count > 0 {
+      commands.trigger(AnimationLoopFinishedEvent {
+        entity,
+        finished_loop_count: advanced_result.loop_finished_count,
+      });
+    }
+    if advanced_result.is_animation_finished {
       commands.trigger(AnimationFinishedEvent(entity));
     }
   }
@@ -812,10 +818,16 @@ fn handle_advance_animation_frame_event(
     return;
   }
 
-  let is_animation_finished =
+  let advanced_result =
     advance_animation_frame(artwork, &mut frame_animation, &mut px_state, trigger.step);
 
-  if is_animation_finished {
+  if advanced_result.loop_finished_count > 0 {
+    commands.trigger(AnimationLoopFinishedEvent {
+      entity,
+      finished_loop_count: advanced_result.loop_finished_count,
+    });
+  }
+  if advanced_result.is_animation_finished {
     commands.trigger(AnimationFinishedEvent(entity));
   }
 }
@@ -839,24 +851,51 @@ fn handle_restart_frame_animation_event(
   frame_animation.play_state = AnimationPlayState::Playing;
 }
 
+struct AdvancedFrameResult {
+  loop_finished_count: u16,
+  is_animation_finished: bool,
+}
+
+struct AdvancedOneFrameResult {
+  is_loop_finished: bool,
+  is_animation_finished: bool,
+}
+
 fn advance_animation_frame(
   px_artwork: &PxArtwork,
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
   step: FrameStep,
-) -> bool {
+) -> AdvancedFrameResult {
   match step {
     FrameStep::Fixed(step_count) => {
+      let mut loop_finished_count: u16 = 0;
       for _ in 0..step_count {
-        if advance_one_frame(px_artwork, frame_animation, px_state) {
-          return true;
+        let advanced_result = advance_one_frame(px_artwork, frame_animation, px_state);
+        if advanced_result.is_loop_finished {
+          loop_finished_count = loop_finished_count.saturating_add(1);
         }
+        if advanced_result.is_animation_finished {
+          return AdvancedFrameResult {
+            loop_finished_count,
+            is_animation_finished: true,
+          };
+        }
+      }
+
+      AdvancedFrameResult {
+        loop_finished_count,
+        is_animation_finished: false,
       }
     }
     FrameStep::Delta(delta_value) => {
+      let mut loop_finished_count: u16 = 0;
       px_state.surplus_delta += delta_value;
       let Some(frame_duration) = px_artwork.frame_duration(px_state.frame_index as usize) else {
-        return true;
+        return AdvancedFrameResult {
+          loop_finished_count,
+          is_animation_finished: false,
+        };
       };
       let mut next_duration = Duration::from_secs_f32(
         frame_animation
@@ -866,16 +905,29 @@ fn advance_animation_frame(
 
       while px_state.surplus_delta >= next_duration {
         if next_duration.is_zero() {
-          return false;
+          return AdvancedFrameResult {
+            loop_finished_count,
+            is_animation_finished: false,
+          };
         }
         px_state.surplus_delta = px_state.surplus_delta.saturating_sub(next_duration);
 
-        if advance_one_frame(px_artwork, frame_animation, px_state) {
-          return true;
+        let advanced_result = advance_one_frame(px_artwork, frame_animation, px_state);
+        if advanced_result.is_loop_finished {
+          loop_finished_count = loop_finished_count.saturating_add(1);
+        }
+        if advanced_result.is_animation_finished {
+          return AdvancedFrameResult {
+            loop_finished_count,
+            is_animation_finished: true,
+          };
         }
 
         let Some(frame_duration) = px_artwork.frame_duration(px_state.frame_index as usize) else {
-          return true;
+          return AdvancedFrameResult {
+            loop_finished_count,
+            is_animation_finished: false,
+          };
         };
         next_duration = Duration::from_secs_f32(
           frame_animation
@@ -883,17 +935,20 @@ fn advance_animation_frame(
             .unwrap_or(frame_duration.as_secs_f32()),
         );
       }
+
+      AdvancedFrameResult {
+        loop_finished_count,
+        is_animation_finished: false,
+      }
     }
   }
-
-  false
 }
 
 fn advance_one_frame(
   px_artwork: &PxArtwork,
   frame_animation: &mut PxFrameAnimation,
   px_state: &mut PxState,
-) -> bool {
+) -> AdvancedOneFrameResult {
   let range = px_artwork.get_tag_range(&px_state._current_tag);
   let previous_frame_index = px_state.frame_index;
   let previous_direction = px_state.temporary_direction;
@@ -944,11 +999,17 @@ fn advance_one_frame(
       frame_animation.play_state = AnimationPlayState::Stopped;
       reset_px_state(px_state, px_artwork, Some(frame_animation));
 
-      return true;
+      return AdvancedOneFrameResult {
+        is_loop_finished: true,
+        is_animation_finished: true,
+      };
     }
   }
 
-  false
+  AdvancedOneFrameResult {
+    is_loop_finished: is_animation_unit_ended,
+    is_animation_finished: false,
+  }
 }
 
 fn initialize_px_atlas(
