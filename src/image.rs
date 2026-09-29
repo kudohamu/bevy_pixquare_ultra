@@ -6,7 +6,10 @@ use image::{ExtendedColorType, ImageEncoder, codecs::qoi::QoiEncoder};
 
 use crate::{error::PixquareLoaderError, loader::PixquareLoaderSettings, processor::ImageCodec};
 
-pub fn encode_image(codec: ImageCodec, image: &Image) -> Result<Vec<u8>, PixquareLoaderError> {
+pub(crate) fn encode_image(
+  codec: ImageCodec,
+  image: &Image,
+) -> Result<Vec<u8>, PixquareLoaderError> {
   if image.texture_descriptor.format != TextureFormat::Rgba8UnormSrgb
     && image.texture_descriptor.format != TextureFormat::Rgba8Unorm
   {
@@ -42,7 +45,7 @@ pub fn encode_image(codec: ImageCodec, image: &Image) -> Result<Vec<u8>, Pixquar
   Ok(buf)
 }
 
-pub fn decode_image(
+pub(crate) fn decode_image(
   codec: ImageCodec,
   encoded_buf: &[u8],
   supported_compressed_formats: CompressedImageFormats,

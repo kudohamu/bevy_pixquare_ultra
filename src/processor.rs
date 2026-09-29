@@ -401,6 +401,7 @@ impl AssetSaver for PixquareSaver {
 ///         .run();
 /// }
 /// ```
+#[derive(Debug)]
 pub struct PixquareProcessorPlugin;
 
 impl Plugin for PixquareProcessorPlugin {

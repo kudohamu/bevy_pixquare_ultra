@@ -61,7 +61,7 @@ impl Default for PixquareFile {
 impl AsAssetId for PixquareFile {
   type Asset = PxArtwork;
 
-  fn as_asset_id(&self) -> bevy::asset::AssetId<Self::Asset> {
+  fn as_asset_id(&self) -> AssetId<Self::Asset> {
     self.artwork.id()
   }
 }
@@ -176,7 +176,7 @@ impl PxTag {
 /// Users must not manually add or remove this component.
 #[derive(Debug, Component)]
 pub struct PxState {
-  pub(crate) artwork_id: Option<bevy::asset::AssetId<PxArtwork>>,
+  pub(crate) artwork_id: Option<AssetId<PxArtwork>>,
   pub(crate) frame_index: u16,
   pub(crate) _current_direction: AnimationDirection,
   pub(crate) temporary_direction: AnimationDirection,
@@ -1150,7 +1150,7 @@ fn log_px_artwork_load_failures(mut failures: MessageReader<AssetLoadFailedEvent
 pub struct PixquareRendererPlugin;
 
 impl Plugin for PixquareRendererPlugin {
-  fn build(&self, app: &mut bevy::app::App) {
+  fn build(&self, app: &mut App) {
     app
       .configure_sets(
         PostUpdate,
