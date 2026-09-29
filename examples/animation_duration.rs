@@ -1,8 +1,9 @@
+//! example of overriding the frame duration.
+//!
+//! command: cargo run --example animation_duration
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxFrameAnimation},
-};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation};
 
 fn main() {
   App::new()

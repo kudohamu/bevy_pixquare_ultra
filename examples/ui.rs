@@ -1,5 +1,9 @@
+//! example of rendering to ui node.
+//!
+//! command: cargo run --example ui
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{PixquareUltraPlugin, renderer::PixquareFile};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin};
 
 fn main() {
   App::new()

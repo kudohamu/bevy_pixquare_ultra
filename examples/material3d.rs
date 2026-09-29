@@ -1,3 +1,7 @@
+//! example of rendering px image to 3d material.
+//!
+//! command: cargo run --features=3d --example material3d
+
 use bevy::{
   image::ImageSamplerDescriptor,
   log::LogPlugin,
@@ -7,9 +11,8 @@ use bevy::{
   shader::ShaderRef,
 };
 use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  data_type::LayerVisibility,
-  renderer::{PixquareFile, PxFrameAnimation, PxRenderAppExt, RenderPx},
+  prelude::{LayerVisibility, PixquareFile, PixquareUltraPlugin, PxFrameAnimation},
+  renderer::{PxRenderAppExt, RenderPx},
 };
 
 const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wgsl";

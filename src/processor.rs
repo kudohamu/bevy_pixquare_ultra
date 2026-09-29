@@ -376,6 +376,31 @@ impl AssetSaver for PixquareSaver {
   }
 }
 
+/// A bevy plugin for Registering asset processing support for Pixquare file.
+///
+/// When Bevy's asset processing is enabled, this plugin registers `.px`
+/// files for preprocessing and registers a loader for the processed format.
+/// Processing stores composited frame images and animation metadata so they
+/// do not need to be reconstructed from the Pixquare file at runtime.
+///
+/// This plugin is added automatically by [`PixquareUltraPlugin`](crate::PixquareUltraPlugin)
+/// when the `asset_processing` feature is enabled. Applications normally do
+/// not need to add it separately.
+///
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_pixquare_ultra::prelude::PixquareUltraPlugin;
+///
+/// fn main() {
+///     App::new()
+///         .add_plugins(DefaultPlugins.set(AssetPlugin {
+///             mode: AssetMode::Processed,
+///             ..default()
+///         }))
+///         .add_plugins(PixquareUltraPlugin)
+///         .run();
+/// }
+/// ```
 pub struct PixquareProcessorPlugin;
 
 impl Plugin for PixquareProcessorPlugin {

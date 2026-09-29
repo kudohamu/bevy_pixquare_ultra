@@ -4,6 +4,7 @@ use std::fmt::Display;
 use bevy::math::UVec2;
 use pixquare::error::{ArtworkOperationError, ParseError};
 
+/// Represents errors that occur when loading a pixquare file.
 #[derive(Debug)]
 pub enum PixquareLoaderError {
   ArtworkOperationError(ArtworkOperationError),
@@ -164,6 +165,7 @@ impl From<rmp_serde::encode::Error> for PixquareLoaderError {
   }
 }
 
+/// Represents errors that occur when loading a Ron file for a texture atlas.
 #[cfg(feature = "atlas_asset")]
 #[derive(Debug)]
 pub enum PxAtlasLoaderError {

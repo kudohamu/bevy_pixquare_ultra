@@ -1,3 +1,7 @@
+//! example of rendering px image to 2d material.
+//!
+//! command: cargo run --example material2d
+
 use bevy::{
   image::ImageSamplerDescriptor,
   log::LogPlugin,
@@ -7,8 +11,8 @@ use bevy::{
   sprite_render::{AlphaMode2d, Material2d, Material2dPlugin, MeshMaterial2d},
 };
 use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxFrameAnimation, PxRenderAppExt, RenderPx},
+  prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation},
+  renderer::{PxRenderAppExt, RenderPx},
 };
 
 const SHADER_ASSET_PATH: &str = "shaders/pixquare_material.wgsl";

@@ -1,8 +1,9 @@
+//! example of using bevy's asset processing pipeline.
+//!
+//! command: cargo run --features=asset_processing --example asset_processing
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxFrameAnimation},
-};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation};
 
 fn main() {
   App::new()

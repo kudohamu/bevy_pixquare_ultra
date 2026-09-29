@@ -1,9 +1,12 @@
+//! example of manually advancing frame animations.
+//! advance animation by one frame on left mouse click.
+//!
+//! command: cargo run --example manual
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  data_type::AnimationPlayState,
   event::AdvanceAnimationFrameEvent,
-  renderer::{PixquareFile, PxFrameAnimation},
+  prelude::{AnimationPlayState, PixquareFile, PixquareUltraPlugin, PxFrameAnimation},
 };
 
 fn main() {

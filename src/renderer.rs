@@ -32,7 +32,7 @@ use bevy::pbr::{Material, MeshMaterial3d};
 use crate::{
   data_type::{AnimationDirection, AnimationPlayState, FrameStep, LayerVisibility},
   event::{
-    AdvanceAnimationFrameEvent, AnimationLoopFinishedEvent, PixquareFileInitializedEvent,
+    AdvanceAnimationFrameEvent, AnimationFinishedEvent, PixquareFileInitializedEvent,
     RestartFrameAnimationEvent,
   },
   loader::PxArtwork,
@@ -41,6 +41,7 @@ use crate::{
 #[cfg(feature = "atlas_asset")]
 use crate::loader::PxAtlasAsset;
 
+/// A component that specifies Pixquare artwork file to load.
 #[derive(Debug, Component)]
 #[require(PxState, PendingPxInitialization, PxRenderedImageCache)]
 pub struct PixquareFile {
@@ -65,25 +66,100 @@ impl AsAssetId for PixquareFile {
   }
 }
 
+/// A component that configures how the frame animation is played.
+///
+/// ```no_run
+/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy_pixquare_ultra::prelude::{
+/// #   AnimationDirection,
+/// #   AnimationPlayState,
+/// #   PixquareFile,
+/// #   PixquareUltraPlugin,
+/// #   PxFrameAnimation,
+/// # };
+/// #
+/// # fn main() {
+/// #   App::new()
+/// #     .add_plugins(
+/// #       DefaultPlugins
+/// #         .set(ImagePlugin {
+/// #           default_sampler: ImageSamplerDescriptor::nearest(),
+/// #         }),
+/// #     )
+/// #     .add_plugins(PixquareUltraPlugin)
+/// #     .add_systems(Startup, setup)
+/// #     .run();
+/// # }
+/// #
+/// fn setup(mut commands: Commands, server: Res<AssetServer>) {
+///   commands.spawn((
+///     PixquareFile {
+///       artwork: server.load("sprite.px"),
+///       ..default()
+///     },
+///     PxFrameAnimation {
+///       play_state: AnimationPlayState::Playing,
+///       duration: Some(0.5),
+///       direction: Some(AnimationDirection::Backward),
+///       ..default()
+///     },
+///     Sprite::default(),
+///     Transform::from_xyz(0., 0., 0.),
+///   ));
+/// }
+/// ```
 #[derive(Debug, Component)]
 pub struct PxFrameAnimation {
+  pub play_state: AnimationPlayState,
   pub duration: Option<f32>,
   pub direction: Option<AnimationDirection>,
   pub loop_count: Option<u16>,
-  pub play_state: AnimationPlayState,
 }
 
 impl Default for PxFrameAnimation {
   fn default() -> Self {
     Self {
+      play_state: AnimationPlayState::Playing,
       duration: None,
       direction: None,
       loop_count: None,
-      play_state: AnimationPlayState::Playing,
     }
   }
 }
 
+/// A component that specifies the frame tags to render.
+///
+/// When you specify a tag using this component and run the frame animation, the animation plays within the range of frames configured for that tag on the Pixquare side.
+///
+/// ```no_run
+/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation, PxTag};
+/// #
+/// # fn main() {
+/// #   App::new()
+/// #     .add_plugins(
+/// #       DefaultPlugins
+/// #         .set(ImagePlugin {
+/// #           default_sampler: ImageSamplerDescriptor::nearest(),
+/// #         }),
+/// #     )
+/// #     .add_plugins(PixquareUltraPlugin)
+/// #     .add_systems(Startup, setup)
+/// #     .run();
+/// # }
+/// #
+/// fn setup(mut commands: Commands, server: Res<AssetServer>) {
+///   commands.spawn((
+///     PixquareFile {
+///       artwork: server.load("sprite.px"),
+///       ..default()
+///     },
+///     PxTag("jump".into()),
+///     Sprite::default(),
+///     Transform::from_xyz(0., 0., 0.),
+///   ));
+/// }
+/// ```
 #[derive(Debug, Component)]
 pub struct PxTag(pub String);
 
@@ -93,6 +169,10 @@ impl PxTag {
   }
 }
 
+/// A component that manages inner state for rendering to using Pixquare data.
+///
+/// The internal state can only be modified by the renderer, and users can only access it via getters.
+/// Users must not manually add or remove this component.
 #[derive(Debug, Component)]
 pub struct PxState {
   pub(crate) artwork_id: Option<bevy::asset::AssetId<PxArtwork>>,
@@ -119,7 +199,7 @@ impl Default for PxState {
 }
 
 impl PxState {
-  /// Whether the current artwork has been loaded and the state initialized.
+  /// Returns whether the current artwork has been loaded and the state initialized.
   ///
   /// This reflects initialization performed in [`PxSystems::Prepare`],
   /// not image application. An artwork handle change is reflected after that phase.
@@ -127,18 +207,22 @@ impl PxState {
     self.artwork_id.is_some()
   }
 
+  /// Returns current frame number.
   pub fn current_frame(&self) -> u16 {
     self.frame_index
   }
 
+  /// Returns current direction.
   pub fn current_direction(&self) -> &AnimationDirection {
     &self.temporary_direction
   }
 
+  /// Returns current loop_count.
   pub fn current_loop_count(&self) -> u16 {
     self.loop_count
   }
 
+  /// Returns current tag name.
   pub fn current_tag(&self) -> &Option<String> {
     &self._current_tag
   }
@@ -178,6 +262,42 @@ struct PxRenderedImageCache {
   dirty: bool,
 }
 
+/// A component that defines named regions of Pixquare artwork for texture-atlas rendering.
+///
+/// Attach this component alongside [`PixquareFile`] and a render target.
+/// Use [`PxAtlasName`] to select which region is rendered.
+///
+/// Regions can be supplied directly with [`PxAtlas::new`]. With the
+/// `atlas_asset` feature, they can also be loaded from a `.pxatlas.ron` file
+/// using [`PxAtlas::from_asset`].
+///
+/// ```no_run
+/// use bevy::{platform::collections::HashMap, prelude::*};
+/// use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxAtlas, PxAtlasName};
+///
+/// fn main() {
+///   App::new()
+///     .add_plugins(DefaultPlugins)
+///     .add_plugins(PixquareUltraPlugin)
+///     .add_systems(Startup, setup)
+///     .run();
+/// }
+///
+/// fn setup(mut commands: Commands, server: Res<AssetServer>) {
+///   let mut regions = HashMap::new();
+///   regions.insert("flower".into(), URect::new(0, 0, 16, 16));
+///
+///   commands.spawn((
+///     PixquareFile {
+///       artwork: server.load("sprite.px"),
+///       ..default()
+///     },
+///     PxAtlas::new(regions),
+///     PxAtlasName::new("flower".into()),
+///     Sprite::default(),
+///   ));
+/// }
+/// ```
 #[derive(Debug, Component)]
 pub struct PxAtlas {
   source: PxAtlasSource,
@@ -205,6 +325,20 @@ impl PxAtlas {
   }
 }
 
+/// A component that selects the named region to display from a [`PxAtlas`].
+///
+/// Add this component to the same entity as [`PixquareFile`] and [`PxAtlas`].
+/// The name must match a region defined in the atlas. Change this component's
+/// name to switch the displayed region without replacing the atlas.
+///
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_pixquare_ultra::prelude::PxAtlasName;
+///
+/// fn display_flower(mut commands: Commands, entity: Entity) {
+///   commands.entity(entity).insert(PxAtlasName::new("flower".into()));
+/// }
+/// ```
 #[derive(Debug, Component)]
 pub struct PxAtlasName(pub String);
 
@@ -232,6 +366,42 @@ impl PxAtlasMeta {
   }
 }
 
+/// A trait used to pass Pixquare frame images to a render target.
+///
+/// Implement this trait to apply Pixquare images to a custom component or
+/// material. `texture` is Pixquare image. `atlas` is the
+/// selected texture-atlas region, or `None` when no region is selected.
+/// `Param` provides any additional Bevy system parameters needed by the
+/// implementation; use `()` when none are needed.
+///
+/// Component types implementing this trait must be registered with
+/// [`PxRenderAppExt::register_px_render_target`]. [`Sprite`] and
+/// [`ImageNode`] are registered by default.
+///
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_pixquare_ultra::renderer::{PxRenderAppExt, RenderPx};
+///
+/// #[derive(Component)]
+/// struct MyRenderTarget(Handle<Image>);
+///
+/// impl RenderPx for MyRenderTarget {
+///   type Param = ();
+///
+///   fn render_px(
+///     &mut self,
+///     texture: Handle<Image>,
+///     _atlas: Option<TextureAtlas>,
+///     _param: &mut (),
+///   ) {
+///     self.0 = texture;
+///   }
+/// }
+///
+/// fn register(app: &mut App) {
+///   app.register_px_render_target::<MyRenderTarget>();
+/// }
+/// ```
 pub trait RenderPx {
   type Param: SystemParam + 'static;
 
@@ -609,15 +779,15 @@ fn update_frame_index(
       continue;
     };
 
-    let is_loop_finished = advance_animation_frame(
+    let is_animation_finished = advance_animation_frame(
       artwork,
       &mut frame_animation,
       &mut px_state,
       FrameStep::Delta(time.delta()),
     );
 
-    if is_loop_finished {
-      commands.trigger(AnimationLoopFinishedEvent(entity));
+    if is_animation_finished {
+      commands.trigger(AnimationFinishedEvent(entity));
     }
   }
 }
@@ -642,11 +812,11 @@ fn handle_advance_animation_frame_event(
     return;
   }
 
-  let is_loop_finished =
+  let is_animation_finished =
     advance_animation_frame(artwork, &mut frame_animation, &mut px_state, trigger.step);
 
-  if is_loop_finished {
-    commands.trigger(AnimationLoopFinishedEvent(entity));
+  if is_animation_finished {
+    commands.trigger(AnimationFinishedEvent(entity));
   }
 }
 
@@ -921,6 +1091,7 @@ fn log_px_artwork_load_failures(mut failures: MessageReader<AssetLoadFailedEvent
   }
 }
 
+/// A bevy plugin for rendering artwork file of Pixquare.
 #[derive(Debug)]
 pub struct PixquareRendererPlugin;
 
@@ -1814,7 +1985,7 @@ mod tests {
   struct ObservedAnimationLoopFinishedEvents(Vec<Entity>);
 
   fn observe_animation_loop_finished_event(
-    event: On<AnimationLoopFinishedEvent>,
+    event: On<AnimationFinishedEvent>,
     mut observed_events: ResMut<ObservedAnimationLoopFinishedEvents>,
   ) {
     observed_events.0.push(event.0);

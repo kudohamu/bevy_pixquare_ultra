@@ -1,8 +1,10 @@
+//! example of rendering only a specific region of image using a texture atlas.
+//! You can also define regions using a Ron file.
+//!
+//! command: cargo run --features=atlas_asset --example texture_atlas_from_asset
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxAtlas, PxAtlasName},
-};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxAtlas, PxAtlasName};
 
 fn main() {
   App::new()

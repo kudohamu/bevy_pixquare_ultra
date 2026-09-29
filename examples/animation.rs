@@ -1,8 +1,9 @@
+//! example using PxFrameAnimation component.
+//!
+//! command: cargo run --example animation
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxFrameAnimation},
-};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation};
 
 fn main() {
   App::new()

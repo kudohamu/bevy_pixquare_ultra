@@ -1,8 +1,11 @@
+//! example of animating with a specified tag.
+//! switch animations by pressing and releasing keys of AWSD.
+//!
+//! command: cargo run --example tag_animation
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  data_type::AnimationPlayState,
-  renderer::{PixquareFile, PxFrameAnimation, PxTag},
+use bevy_pixquare_ultra::prelude::{
+  AnimationPlayState, PixquareFile, PixquareUltraPlugin, PxFrameAnimation, PxTag,
 };
 
 fn main() {

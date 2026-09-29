@@ -23,6 +23,8 @@ use crate::error::PxAtlasLoaderError;
 #[cfg(feature = "atlas_asset")]
 use bevy::{math::URect, platform::collections::HashMap};
 
+/// Represents Artwork data of Pixquare.
+/// Holds only the minimal structural data required for rendering in bevy_pixquare_ultra.
 #[derive(Debug, Asset, TypePath)]
 pub struct PxArtwork {
   canvas_size: UVec2,
@@ -40,18 +42,22 @@ impl PxArtwork {
     }
   }
 
+  /// Returns size of canvas.
   pub fn canvas_size(&self) -> UVec2 {
     self.canvas_size
   }
 
+  /// Returns length of frames.
   pub fn frame_count(&self) -> usize {
     self.frames.len()
   }
 
+  /// Returns tags.
   pub fn tags(&self) -> &[PxTagMeta] {
     &self.tags
   }
 
+  /// Returns the handle of the frame image specified by the frame number.
   pub fn frame_image(
     &self,
     frame_index: usize,
@@ -65,12 +71,15 @@ impl PxArtwork {
     }
   }
 
+  /// Returns the frame duration specified by the frame number.
   pub fn frame_duration(&self, frame_index: usize) -> Option<&Duration> {
     let frame = self.frames.get(frame_index)?;
 
     Some(&frame.duration)
   }
 
+  /// Returns the frame range specified by tag.
+  /// If None is specified, returns the range for all frames.
   pub fn get_tag_range(&self, tag: &Option<String>) -> Range<u16> {
     match tag {
       Some(tag) => {
@@ -86,6 +95,7 @@ impl PxArtwork {
     }
   }
 
+  /// Returns loop count specified by tag.
   pub fn get_loop_count_by_tag(&self, tag: &str) -> Option<u16> {
     let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
       warn!("tag: `{}` is not found", tag);
@@ -96,6 +106,7 @@ impl PxArtwork {
     Some(tag.loop_count)
   }
 
+  /// Returns animation direction specified by tag.
   pub fn get_animation_direction_by_tag(&self, tag: &str) -> Option<AnimationDirection> {
     let Some(tag) = self.tags.iter().find(|t| t.name == *tag) else {
       warn!("tag: `{}` is not found", tag);
@@ -222,6 +233,8 @@ impl PxFrameMeta {
   }
 }
 
+/// Represents tag data of Pixquare.
+/// Holds only the minimal structural data required for rendering in bevy_pixquare_ultra.
 #[derive(Debug, Clone)]
 pub struct PxTagMeta {
   pub name: String,
@@ -231,6 +244,46 @@ pub struct PxTagMeta {
   pub loop_count: u16,
 }
 
+/// Named texture-atlas regions data loaded from a `.pxatlas.ron` file.
+///
+/// Each region specifies a rectangle within the Pixquare artwork's canvas.
+/// This asset contains region definitions, not image data.
+///
+/// A example of `.pxatlas.ron` file:
+///
+/// ```text
+/// (
+///   regions: {
+///     "flower": (x: 0, y: 0, width: 16, height: 16),
+///   },
+/// )
+/// ```
+///
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_pixquare_ultra::prelude::{PixquareUltraPlugin, PixquareFile, PxAtlas, PxAtlasName};
+///
+/// fn main() {
+///     App::new()
+///         .add_plugins(DefaultPlugins)
+///         .add_plugins(PixquareUltraPlugin)
+///         .add_systems(Startup, setup)
+///         .run();
+/// }
+///
+/// fn setup(mut commands: Commands, server: Res<AssetServer>) {
+///   commands.spawn((
+///     PixquareFile {
+///       artwork: server.load("sprite.px"),
+///       ..default()
+///     },
+///     PxAtlas::from_asset(server.load("sprite.pxatlas.ron")),
+///     PxAtlasName::new("flower".into()),
+///     Sprite::default(),
+///     Transform::from_xyz(0., 0., 0.),
+///   ));
+/// }
+/// ```
 #[cfg(feature = "atlas_asset")]
 #[derive(Debug, Clone, Asset, TypePath)]
 pub struct PxAtlasAsset {
@@ -255,6 +308,7 @@ pub(crate) struct PxAtlasRegionRon {
 #[derive(Debug, TypePath)]
 pub(crate) struct PixquareLoader;
 
+/// Settings for how to load Pixquare images.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PixquareLoaderSettings {
@@ -333,6 +387,7 @@ impl AssetLoader for PxAtlasLoader {
   }
 }
 
+/// A bevy plugin for loading Pixquare artwork file.
 #[derive(Debug)]
 pub struct PixquareLoaderPlugin;
 

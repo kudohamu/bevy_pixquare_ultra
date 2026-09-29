@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+/// Represents direction of animation.
+/// Variants correspond to the value that can be specified in Pixquare.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationDirection {
   Forward,
@@ -18,16 +20,24 @@ impl AnimationDirection {
   }
 }
 
+/// Represents playback state of the animation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationPlayState {
+  /// Playing animation.
   Playing,
+  /// Paused animation.
   Paused,
+  /// Stopped animation.
+  /// Specifying this variant resets the internal animation state.
   Stopped,
 }
 
+/// Represents which layers to render.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerVisibility {
+  /// Only visible layers.
   Visible,
+  /// All layers. Include invisible layers.
   All,
 }
 
@@ -49,8 +59,11 @@ impl std::fmt::Display for LayerVisibility {
   }
 }
 
+/// Represents the frame advancement granularity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameStep {
+  /// Advances by a fixed number of frames.
   Fixed(u16),
+  /// Advances by the number of frames corresponding to the given duration.
   Delta(Duration),
 }

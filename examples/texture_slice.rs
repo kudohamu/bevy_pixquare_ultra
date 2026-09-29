@@ -1,5 +1,9 @@
+//! example of implementing nine-patch scaling using texture_slice.
+//!
+//! command: cargo run --example texture_slice
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
-use bevy_pixquare_ultra::{PixquareUltraPlugin, renderer::PixquareFile};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin};
 
 fn main() {
   App::new()

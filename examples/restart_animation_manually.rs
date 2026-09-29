@@ -1,8 +1,12 @@
+//! example of manually restarting animation.
+//! restart animation on left mouse click.
+//!
+//! command: cargo run --example restart_animation_manually
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
   event::RestartFrameAnimationEvent,
-  renderer::{PixquareFile, PxFrameAnimation},
+  prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation},
 };
 
 fn main() {

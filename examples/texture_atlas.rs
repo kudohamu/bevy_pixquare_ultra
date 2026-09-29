@@ -1,10 +1,12 @@
+//! example of rendering only a specific region of image using a texture atlas.
+//! defines named regions with display bounds, allowing you to specify which region to render.
+//!
+//! command: cargo run --example texture_atlas
+
 use bevy::{
   image::ImageSamplerDescriptor, log::LogPlugin, platform::collections::HashMap, prelude::*,
 };
-use bevy_pixquare_ultra::{
-  PixquareUltraPlugin,
-  renderer::{PixquareFile, PxAtlas, PxAtlasName},
-};
+use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxAtlas, PxAtlasName};
 
 #[derive(Debug, Component)]
 struct Plant;
