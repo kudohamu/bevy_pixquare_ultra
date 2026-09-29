@@ -2,6 +2,8 @@
 //!
 //! command: cargo run --example animation_duration
 
+use std::time::Duration;
+
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation};
 
@@ -32,7 +34,7 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
       ..default()
     },
     PxFrameAnimation {
-      duration: Some(0.3),
+      duration: Some(Duration::from_millis(300)),
       ..default()
     },
     Sprite::default(),
@@ -49,13 +51,17 @@ fn change_animation_duration(
       let Some(duration) = px_animation.duration else {
         continue;
       };
-      px_animation.duration = Some((duration + 0.05).clamp(0.0, 1.0));
+      px_animation.duration = Some(Duration::from_secs_f32(
+        (duration.as_secs_f32() + 0.05).clamp(0.0, 1.0),
+      ));
     }
     if inputs.just_pressed(KeyCode::KeyD) {
       let Some(duration) = px_animation.duration else {
         continue;
       };
-      px_animation.duration = Some((duration - 0.05).clamp(0.0, 1.0));
+      px_animation.duration = Some(Duration::from_secs_f32(
+        (duration.as_secs_f32() - 0.05).clamp(0.0, 1.0),
+      ));
     }
   }
 }
