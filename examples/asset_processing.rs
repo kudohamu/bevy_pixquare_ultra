@@ -17,6 +17,7 @@ fn main() {
           ..default()
         })
         .set(AssetPlugin {
+          // NOTE: This specification is required to enable Bevy's asset processing pipeline.
           mode: AssetMode::Processed,
           ..default()
         }),
