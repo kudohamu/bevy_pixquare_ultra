@@ -7,7 +7,7 @@ description = "A bevy plugin to load and render artwork data of Pixquare"
 repository = "https://github.com/kudohamu/bevy_pixquare_ultra"
 license = "MIT OR Apache-2.0"
 keywords = ["bevy", "gamedev", "pixquare", "pixel-art", "animation"]
-categories = ["game-development ", "graphics"]
+categories = ["game-development", "graphics"]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
