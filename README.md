@@ -10,7 +10,7 @@ And this is heavily inspired by [bevy_aseprite_ultra](https://github.com/Lommix/
 
 - Play animations using the frame durations and tags stored in Pixquare artwork.
 - Render artwork in Sprite, UI, 2D Materials, and custom render targets.
-- Display a named region of an artwork as a texture atlas sprite.
+- Render a named region of an artwork as a texture atlas sprite.
 - Advance, pause, restart, and observe animations from your game logic.
 
 ## Getting started
@@ -70,6 +70,7 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
 | [Observe Animation Finished Events](./examples/observe_animation_finished_events.rs) | example observing animation finished events of PxFrameAnimation component. |
 | [Restart Animation Manually](./examples/restart_animation_manually.rs) | example of manually restarting animation. |
 | [Simple](./examples/simple.rs) | minimal example of `bevy_pixquare_ultra`. |
+| [Tag](./examples/tag.rs) | example of specifying the frame to render by tag. |
 | [Tag Animation](./examples/tag_animation.rs) | example of animating with a specified tag. |
 | [Texture Atlas](./examples/texture_atlas.rs) | example of rendering only a specific region of image using a texture atlas. |
 | [Texture Atlas From Asset](./examples/texture_atlas_from_asset.rs) | example of rendering only a specific region of image using a texture atlas. |
