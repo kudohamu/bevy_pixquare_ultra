@@ -6,6 +6,10 @@ The ultimate bevy pixquare plugin. This plugin allows you to load and render art
 [Pixquare](https://www.pixquare.art/) is the awesome and feature-rich pixel art editor.  
 And this is heavily inspired by [bevy_aseprite_ultra](https://github.com/Lommix/bevy_aseprite_ultra).
 
+<div align="center">
+  <img src="assets/example.gif" alt="example" width="600">
+</div>
+
 ## Features
 
 - Play animations using the frame durations and tags stored in Pixquare artwork.
