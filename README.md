@@ -85,4 +85,5 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
 
 | Bevy version | `bevy_pixquare_ultra` version |
 | :-- | :-- |
+| 0.19 | 0.2 |
 | 0.18 | 0.1 |

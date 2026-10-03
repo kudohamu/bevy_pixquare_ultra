@@ -3,6 +3,7 @@
 //! command: cargo run --example material2d
 
 use bevy::{
+  asset::ReflectAsset,
   image::ImageSamplerDescriptor,
   log::LogPlugin,
   prelude::*,
@@ -38,7 +39,8 @@ fn main() {
     .run();
 }
 
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
+#[derive(Asset, Reflect, AsBindGroup, Debug, Clone, Default)]
+#[reflect(Asset)]
 struct PixquareMaterial {
   #[texture(0)]
   #[sampler(1)]

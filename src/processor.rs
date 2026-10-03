@@ -3,8 +3,8 @@ use std::time::Duration;
 use bevy::{
   app::Plugin,
   asset::{
-    AssetApp, AssetLoader, AsyncReadExt, AsyncWriteExt, Handle, processor::LoadTransformAndSave,
-    saver::AssetSaver, transformer::IdentityAssetTransformer,
+    AssetApp, AssetLoader, AssetPath, AsyncReadExt, AsyncWriteExt, Handle,
+    processor::LoadTransformAndSave, saver::AssetSaver, transformer::IdentityAssetTransformer,
   },
   image::{CompressedImageFormats, Image},
   math::UVec2,
@@ -156,7 +156,7 @@ struct ProcessedPxArtworkV1 {
 impl ProcessedPxArtworkV1 {
   async fn from_artwork(
     artwork: &PxArtwork,
-    asset: &bevy::asset::saver::SavedAsset<'_, PxArtwork>,
+    asset: &bevy::asset::saver::SavedAsset<'_, '_, PxArtwork>,
   ) -> Result<(ProcessedPxArtworkV1, Vec<Vec<u8>>), PixquareLoaderError> {
     let mut frames = Vec::with_capacity(artwork.frame_count());
     let mut images = Vec::with_capacity(artwork.frame_count() * 2);
@@ -166,7 +166,7 @@ impl ProcessedPxArtworkV1 {
       for visibility in [LayerVisibility::Visible, LayerVisibility::All] {
         let label = PxFrameMeta::generate_image_label(frame_index, visibility);
         let image = asset
-          .get_labeled::<Image, str>(&label)
+          .get_labeled::<Image>(&label)
           .ok_or_else(|| PixquareLoaderError::MissingLabeledImageData(label.clone()))?;
 
         let encoded_image = encode_image(ImageCodec::Qoi, image.get())?;
@@ -343,8 +343,9 @@ impl AssetSaver for PixquareSaver {
   async fn save(
     &self,
     writer: &mut bevy::asset::io::Writer,
-    asset: bevy::asset::saver::SavedAsset<'_, Self::Asset>,
+    asset: bevy::asset::saver::SavedAsset<'_, '_, Self::Asset>,
     _settings: &Self::Settings,
+    _asset_path: AssetPath<'_>,
   ) -> Result<<Self::OutputLoader as AssetLoader>::Settings, Self::Error> {
     let px_artwork = asset.get();
     let (processed_artwork, image_bufs) =
@@ -361,7 +362,7 @@ impl AssetSaver for PixquareSaver {
     }
 
     let first_image_label = PxFrameMeta::generate_image_label(0, LayerVisibility::All);
-    let image = asset.get_labeled::<Image, str>(&first_image_label);
+    let image = asset.get_labeled::<Image>(&first_image_label);
 
     let output_settings = match image {
       Some(image) => PixquareLoaderSettings {

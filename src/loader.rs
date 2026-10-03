@@ -2,11 +2,11 @@ use std::{ops::Range, time::Duration};
 
 use bevy::{
   app::{App, Plugin},
-  asset::{Asset, AssetApp, AssetLoader, Handle, RenderAssetUsages},
+  asset::{Asset, AssetApp, AssetLoader, Handle, ReflectAsset, RenderAssetUsages},
   image::{Image, ImageSampler},
   log::warn,
   math::UVec2,
-  reflect::TypePath,
+  reflect::{Reflect, TypePath},
   render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use pixquare::Artwork;
@@ -25,7 +25,8 @@ use bevy::{math::URect, platform::collections::HashMap};
 
 /// Represents Artwork data of Pixquare.
 /// Holds only the minimal structural data required for rendering in bevy_pixquare_ultra.
-#[derive(Debug, Asset, TypePath)]
+#[derive(Debug, Asset, Reflect)]
+#[reflect(Asset)]
 pub struct PxArtwork {
   canvas_size: UVec2,
   frames: Vec<PxFrameMeta>,
@@ -220,7 +221,7 @@ impl PxArtwork {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Reflect)]
 pub(crate) struct PxFrameMeta {
   pub visible_layer_image: Handle<Image>,
   pub all_layer_image: Handle<Image>,
@@ -235,7 +236,7 @@ impl PxFrameMeta {
 
 /// Represents tag data of Pixquare.
 /// Holds only the minimal structural data required for rendering in bevy_pixquare_ultra.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Reflect)]
 pub struct PxTagMeta {
   pub name: String,
   pub start_index: u16,
@@ -285,7 +286,8 @@ pub struct PxTagMeta {
 /// }
 /// ```
 #[cfg(feature = "atlas_asset")]
-#[derive(Debug, Clone, Asset, TypePath)]
+#[derive(Debug, Clone, Asset, Reflect)]
+#[reflect(Asset)]
 pub struct PxAtlasAsset {
   pub(crate) regions: HashMap<String, URect>,
 }
