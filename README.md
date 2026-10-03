@@ -22,7 +22,7 @@ And this is heavily inspired by [bevy_aseprite_ultra](https://github.com/Lommix/
 ```toml
 # Cargo.toml
 [dependencies]
-bevy_pixquare_ultra = "0.1.0"
+bevy_pixquare_ultra = "0.2.0"
 ```
 
 The following is a minimal example.
