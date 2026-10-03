@@ -1,2 +1,2 @@
 [tools]
-"rust" = { version = "1.94.0" }
+"rust" = { version = "1.99.0" }
