@@ -451,7 +451,7 @@ impl<M: Material2d + RenderPx> RenderPx for MeshMaterial2d<M> {
     atlas: Option<TextureAtlas>,
     param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
-    let Some(material) = param.0.get_mut(&*self) else {
+    let Some(mut material) = param.0.get_mut(&*self) else {
       return;
     };
     material.render_px(texture, atlas, &mut param.1);
@@ -468,7 +468,7 @@ impl<M: Material + RenderPx> RenderPx for MeshMaterial3d<M> {
     atlas: Option<TextureAtlas>,
     param: &mut SystemParamItem<'_, '_, Self::Param>,
   ) {
-    let Some(material) = param.0.get_mut(&*self) else {
+    let Some(mut material) = param.0.get_mut(&*self) else {
       return;
     };
     material.render_px(texture, atlas, &mut param.1);

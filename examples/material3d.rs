@@ -3,6 +3,7 @@
 //! command: cargo run --features=3d --example material3d
 
 use bevy::{
+  asset::ReflectAsset,
   image::ImageSamplerDescriptor,
   log::LogPlugin,
   pbr::{Material, MaterialPlugin, MeshMaterial3d},
@@ -42,7 +43,8 @@ fn main() {
     .run();
 }
 
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
+#[derive(Asset, Reflect, AsBindGroup, Debug, Clone, Default)]
+#[reflect(Asset)]
 struct PixquareMaterial {
   #[texture(0)]
   #[sampler(1)]
@@ -80,7 +82,7 @@ fn setup(
 
   commands.spawn((
     PointLight {
-      shadows_enabled: true,
+      shadow_maps_enabled: true,
       ..default()
     },
     Transform::from_xyz(4., 6., 4.),

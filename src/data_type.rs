@@ -1,8 +1,10 @@
 use std::time::Duration;
 
+use bevy::reflect::Reflect;
+
 /// Represents direction of animation.
 /// Variants correspond to the value that can be specified in Pixquare.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum AnimationDirection {
   Forward,
   Backward,
