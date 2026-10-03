@@ -30,7 +30,6 @@ serde = { version = "1.0.218" }
 bevy = { version = "0.19", features = [
   "bevy_window"
 ] }
-bevy_asset_loader = "0.26.0"
 
 [features]
 3d = ["bevy/bevy_pbr"]
