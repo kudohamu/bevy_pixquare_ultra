@@ -13,6 +13,7 @@ use bevy::{
     query::{Added, Changed, Or, With, Without},
     schedule::{IntoScheduleConfigs, SystemSet},
     system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
+    template::{FromTemplate, Template},
     world::Ref,
   },
   image::{Image, TextureAtlas, TextureAtlasLayout},
@@ -25,6 +26,9 @@ use bevy::{
   time::Time,
   ui::{UiSystems, widget::ImageNode},
 };
+
+#[cfg(feature = "atlas_asset")]
+use bevy::asset::HandleTemplate;
 
 #[cfg(feature = "3d")]
 use bevy::pbr::{Material, MeshMaterial3d};
@@ -42,7 +46,7 @@ use crate::{
 use crate::loader::PxAtlasAsset;
 
 /// A component that specifies Pixquare artwork file to load.
-#[derive(Debug, Component)]
+#[derive(Debug, Component, FromTemplate)]
 #[require(PxState, PendingPxInitialization, PxRenderedImageCache)]
 pub struct PixquareFile {
   pub artwork: Handle<PxArtwork>,
@@ -109,7 +113,7 @@ impl AsAssetId for PixquareFile {
 ///   ));
 /// }
 /// ```
-#[derive(Debug, Component)]
+#[derive(Debug, Component, FromTemplate)]
 pub struct PxFrameAnimation {
   pub play_state: AnimationPlayState,
   pub duration: Option<Duration>,
@@ -161,7 +165,7 @@ impl Default for PxFrameAnimation {
 ///   ));
 /// }
 /// ```
-#[derive(Debug, Component)]
+#[derive(Debug, Component, FromTemplate)]
 pub struct PxTag(pub String);
 
 impl PxTag {
@@ -174,7 +178,7 @@ impl PxTag {
 ///
 /// The internal state can only be modified by the renderer, and users can only access it via getters.
 /// Users must not manually add or remove this component.
-#[derive(Debug, Component)]
+#[derive(Debug, Component, FromTemplate)]
 pub struct PxState {
   pub(crate) artwork_id: Option<AssetId<PxArtwork>>,
   pub(crate) frame_index: u16,
@@ -246,10 +250,10 @@ impl PxState {
   }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, FromTemplate)]
 struct PendingPxInitialization;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromTemplate)]
 struct PxRenderedImageKey {
   artwork_id: AssetId<PxArtwork>,
   frame_index: u16,
@@ -304,13 +308,6 @@ pub struct PxAtlas {
   source: PxAtlasSource,
 }
 
-#[derive(Debug, Clone)]
-enum PxAtlasSource {
-  Code(HashMap<String, URect>),
-  #[cfg(feature = "atlas_asset")]
-  Asset(Handle<PxAtlasAsset>),
-}
-
 impl PxAtlas {
   pub fn new(data: HashMap<String, URect>) -> Self {
     Self {
@@ -323,6 +320,64 @@ impl PxAtlas {
     Self {
       source: PxAtlasSource::Asset(handle),
     }
+  }
+}
+
+impl FromTemplate for PxAtlas {
+  type Template = PxAtlasTemplate;
+}
+
+#[derive(Default)]
+#[allow(missing_debug_implementations)]
+pub struct PxAtlasTemplate {
+  source: PxAtlasSourceTemplate,
+}
+
+impl PxAtlasTemplate {
+  pub fn new(data: HashMap<String, URect>) -> Self {
+    Self {
+      source: PxAtlasSourceTemplate::Code(data),
+    }
+  }
+
+  #[cfg(feature = "atlas_asset")]
+  pub fn from_asset(handle: impl Into<HandleTemplate<PxAtlasAsset>>) -> Self {
+    Self {
+      source: PxAtlasSourceTemplate::Asset(handle.into()),
+    }
+  }
+}
+
+impl Template for PxAtlasTemplate {
+  type Output = PxAtlas;
+
+  fn build_template(
+    &self,
+    context: &mut bevy::ecs::template::TemplateContext,
+  ) -> bevy::ecs::error::Result<Self::Output> {
+    Ok(PxAtlas {
+      source: self.source.build_template(context)?,
+    })
+  }
+
+  fn clone_template(&self) -> Self {
+    Self {
+      source: self.source.clone_template(),
+    }
+  }
+}
+
+#[derive(Debug, Clone, FromTemplate)]
+pub enum PxAtlasSource {
+  #[default]
+  Code(HashMap<String, URect>),
+  #[cfg(feature = "atlas_asset")]
+  Asset(Handle<PxAtlasAsset>),
+}
+
+impl Default for PxAtlasSource {
+  fn default() -> Self {
+    Self::Code(HashMap::new())
   }
 }
 
@@ -340,7 +395,7 @@ impl PxAtlas {
 ///   commands.entity(entity).insert(PxAtlasName::new("flower".into()));
 /// }
 /// ```
-#[derive(Debug, Component)]
+#[derive(Debug, Component, FromTemplate)]
 pub struct PxAtlasName(pub String);
 
 impl PxAtlasName {

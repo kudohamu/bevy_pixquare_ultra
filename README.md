@@ -68,6 +68,7 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
 | [Animation](./examples/animation.rs) | example using PxFrameAnimation component. |
 | [Animation Duration](./examples/animation_duration.rs) | example of overriding the frame duration. |
 | [Asset Processing](./examples/asset_processing.rs) | example of using bevy's asset processing pipeline. |
+| [BSN](./examples/bsn.rs) | example of spawning artwork using bsn (Bevy Scene Notation) syntax. |
 | [Manual](./examples/manual.rs) | example of manually advancing frame animations. |
 | [Material 2d](./examples/material2d.rs) | example of rendering px image to 2d material. |
 | [Material 3d](./examples/material3d.rs) | example of rendering px image to 3d material. |

@@ -4,8 +4,9 @@ use bevy::reflect::Reflect;
 
 /// Represents direction of animation.
 /// Variants correspond to the value that can be specified in Pixquare.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum AnimationDirection {
+  #[default]
   Forward,
   Backward,
   PingPong,
@@ -23,9 +24,10 @@ impl AnimationDirection {
 }
 
 /// Represents playback state of the animation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationPlayState {
   /// Playing animation.
+  #[default]
   Playing,
   /// Paused animation.
   Paused,
@@ -35,9 +37,10 @@ pub enum AnimationPlayState {
 }
 
 /// Represents which layers to render.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum LayerVisibility {
   /// Only visible layers.
+  #[default]
   Visible,
   /// All layers. Include invisible layers.
   All,
