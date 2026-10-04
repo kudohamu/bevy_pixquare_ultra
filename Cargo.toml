@@ -1,6 +1,6 @@
 [package]
 name = "bevy_pixquare_ultra"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["kudohamu"]
 description = "A bevy plugin to load and render artwork data of Pixquare"
