@@ -5,6 +5,13 @@
 use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin};
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum ScaleDirection {
+  Expand,
+  #[default]
+  Shrink,
+}
+
 fn main() {
   App::new()
     .add_plugins(
@@ -19,6 +26,7 @@ fn main() {
     )
     .add_plugins(PixquareUltraPlugin)
     .add_systems(Startup, setup)
+    .add_systems(Update, change_sprite_size)
     .run();
 }
 
@@ -44,4 +52,51 @@ fn setup(mut commands: Commands, server: Res<AssetServer>) {
     },
     Transform::from_xyz(0., 0., 0.),
   ));
+}
+
+fn change_sprite_size(
+  mut q_px: Query<&mut Sprite, With<PixquareFile>>,
+  time: Res<Time>,
+  mut horizontal_direction: Local<ScaleDirection>,
+  mut vertical_direction: Local<ScaleDirection>,
+) {
+  for mut sprite in q_px.iter_mut() {
+    let mut next_size = sprite.custom_size.unwrap();
+
+    match *horizontal_direction {
+      ScaleDirection::Expand => {
+        next_size.x = (sprite.custom_size.unwrap().x + 12. * time.delta_secs()).min(50.);
+
+        if next_size.x == 50. {
+          *horizontal_direction = ScaleDirection::Shrink;
+        }
+      }
+      ScaleDirection::Shrink => {
+        next_size.x = (sprite.custom_size.unwrap().x - 12. * time.delta_secs()).max(20.);
+
+        if next_size.x == 20. {
+          *horizontal_direction = ScaleDirection::Expand;
+        }
+      }
+    }
+
+    match *vertical_direction {
+      ScaleDirection::Expand => {
+        next_size.y = (sprite.custom_size.unwrap().y + 12. * time.delta_secs()).min(30.);
+
+        if next_size.y == 30. {
+          *vertical_direction = ScaleDirection::Shrink;
+        }
+      }
+      ScaleDirection::Shrink => {
+        next_size.y = (sprite.custom_size.unwrap().y - 12. * time.delta_secs()).max(10.);
+
+        if next_size.y == 10. {
+          *vertical_direction = ScaleDirection::Expand;
+        }
+      }
+    }
+
+    sprite.custom_size = Some(next_size);
+  }
 }
