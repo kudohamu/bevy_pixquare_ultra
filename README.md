@@ -22,7 +22,7 @@ This plugin is heavily inspired by [bevy_aseprite_ultra](https://github.com/Lomm
 ```toml
 # Cargo.toml
 [dependencies]
-bevy_pixquare_ultra = "0.2.1"
+bevy_pixquare_ultra = "0.2.2"
 ```
 
 The following is a minimal example.
