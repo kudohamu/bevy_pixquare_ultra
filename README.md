@@ -1,6 +1,7 @@
 # Bevy Pixquare Ultra
 
 [![CI](https://img.shields.io/github/actions/workflow/status/kudohamu/bevy_pixquare_ultra/ci.yaml?logo=github&label=CI)](https://github.com/kudohamu/bevy_pixquare_ultra/actions/workflows/ci.yaml)
+[![Latest Version](https://img.shields.io/crates/v/bevy_pixquare_ultra.svg)](https://crates.io/crates/bevy_pixquare_ultra)
 
 The ultimate bevy pixquare plugin. This plugin allows you to load and render artwork data of [Pixquare](https://www.pixquare.art/).  
 [Pixquare](https://www.pixquare.art/) is the awesome and feature-rich pixel art editor.  
