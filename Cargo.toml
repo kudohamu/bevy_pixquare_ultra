@@ -21,7 +21,7 @@ bevy = { version = "0.19", default-features = false, features = [
   "bevy_ui_render",
 ] }
 image = { version = "0.25.6", default-features = false, features = ["qoi"], optional = true }
-pixquare-io = { version = "0.1.0" }
+pixquare-io = { version = "0.2.0" }
 rmp-serde = { version = "1.3.1", optional = true }
 ron = { version = "0.12.2", optional = true }
 serde = { version = "1.0.218" }
