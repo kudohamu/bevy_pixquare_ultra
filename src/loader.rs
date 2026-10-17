@@ -139,8 +139,8 @@ impl PxArtwork {
           };
           let mut visible_layer_image = Image::new(
             Extent3d {
-              width: artwork.canvas_size.width,
-              height: artwork.canvas_size.height,
+              width: artwork.render_size().width,
+              height: artwork.render_size().height,
               depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -159,8 +159,8 @@ impl PxArtwork {
 
           let mut all_layer_image = Image::new(
             Extent3d {
-              width: artwork.canvas_size.width,
-              height: artwork.canvas_size.height,
+              width: artwork.render_size().width,
+              height: artwork.render_size().height,
               depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -196,7 +196,7 @@ impl PxArtwork {
       .collect();
 
     Ok(Self {
-      canvas_size: UVec2::new(artwork.canvas_size.width, artwork.canvas_size.height),
+      canvas_size: UVec2::new(artwork.render_size().width, artwork.render_size().height),
       frames,
       tags,
     })
