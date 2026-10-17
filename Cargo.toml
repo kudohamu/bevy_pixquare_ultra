@@ -54,6 +54,11 @@ path = "examples/asset_processing.rs"
 required-features = ["asset_processing"]
 
 [[example]]
+name = "bsn"
+path = "examples/bsn.rs"
+required-features = ["atlas_asset"]
+
+[[example]]
 name = "texture_atlas_from_asset"
 path = "examples/texture_atlas_from_asset.rs"
 required-features = ["atlas_asset"]
