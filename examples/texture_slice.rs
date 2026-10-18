@@ -2,7 +2,7 @@
 //!
 //! command: cargo run --example texture_slice
 
-use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -16,9 +16,7 @@ fn main() {
   App::new()
     .add_plugins(
       DefaultPlugins
-        .set(ImagePlugin {
-          default_sampler: ImageSamplerDescriptor::nearest(),
-        })
+        .set(ImagePlugin::default_nearest())
         .set(LogPlugin {
           filter: "wgpu=warn,bevy_ecs=info,bevy_pixquare_ultra=debug".into(),
           ..default()

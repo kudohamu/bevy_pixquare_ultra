@@ -74,7 +74,7 @@ impl AsAssetId for PixquareFile {
 ///
 /// ```no_run
 /// # use std::time::Duration;
-/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy::prelude::*;
 /// # use bevy_pixquare_ultra::prelude::{
 /// #   AnimationDirection,
 /// #   AnimationPlayState,
@@ -87,9 +87,7 @@ impl AsAssetId for PixquareFile {
 /// #   App::new()
 /// #     .add_plugins(
 /// #       DefaultPlugins
-/// #         .set(ImagePlugin {
-/// #           default_sampler: ImageSamplerDescriptor::nearest(),
-/// #         }),
+/// #         .set(ImagePlugin::default_nearest()),
 /// #     )
 /// #     .add_plugins(PixquareUltraPlugin)
 /// #     .add_systems(Startup, setup)
@@ -137,16 +135,14 @@ impl Default for PxFrameAnimation {
 /// When you specify a tag using this component and run the frame animation, the animation plays within the range of frames configured for that tag on the Pixquare side.
 ///
 /// ```no_run
-/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy::prelude::*;
 /// # use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation, PxTag};
 /// #
 /// # fn main() {
 /// #   App::new()
 /// #     .add_plugins(
 /// #       DefaultPlugins
-/// #         .set(ImagePlugin {
-/// #           default_sampler: ImageSamplerDescriptor::nearest(),
-/// #         }),
+/// #         .set(ImagePlugin::default_nearest()),
 /// #     )
 /// #     .add_plugins(PixquareUltraPlugin)
 /// #     .add_systems(Startup, setup)
