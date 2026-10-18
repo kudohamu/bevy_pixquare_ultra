@@ -15,7 +15,7 @@ use bevy_pixquare_ultra::{
   renderer::{PxRenderAppExt, RenderPx},
 };
 
-const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wgsl";
+const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wesl";
 
 #[derive(Component)]
 struct Cube;

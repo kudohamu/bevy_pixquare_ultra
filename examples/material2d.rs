@@ -15,7 +15,7 @@ use bevy_pixquare_ultra::{
   renderer::{PxRenderAppExt, RenderPx},
 };
 
-const SHADER_ASSET_PATH: &str = "shaders/pixquare_material.wgsl";
+const SHADER_ASSET_PATH: &str = "shaders/pixquare_material.wesl";
 
 fn main() {
   App::new()
