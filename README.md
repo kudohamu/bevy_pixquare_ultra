@@ -23,7 +23,7 @@ This plugin is heavily inspired by [bevy_aseprite_ultra](https://github.com/Lomm
 ```toml
 # Cargo.toml
 [dependencies]
-bevy_pixquare_ultra = "0.2.2"
+bevy_pixquare_ultra = "0.3.0"
 ```
 
 The following is a minimal example.
@@ -85,5 +85,6 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
 
 | Bevy version | `bevy_pixquare_ultra` version |
 | :-- | :-- |
+| 0.20 | 0.3 |
 | 0.19 | 0.2 |
 | 0.18 | 0.1 |
