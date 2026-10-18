@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::{
-  app::{App, Plugin, PostUpdate},
+  app::{App, MainScheduleOrder, Plugin, PostUpdate},
   asset::{AsAssetId, AssetId, AssetLoadFailedEvent, Assets, Handle},
   ecs::{
     change_detection::DetectChanges,
@@ -11,7 +11,7 @@ use bevy::{
     message::MessageReader,
     observer::On,
     query::{Added, Changed, Or, With, Without},
-    schedule::{IntoScheduleConfigs, SystemSet},
+    schedule::{IntoScheduleConfigs, ScheduleLabel, SystemSet},
     system::{Commands, Query, Res, ResMut, StaticSystemParam, SystemParam, SystemParamItem},
     template::{FromTemplate, Template},
     world::Ref,
@@ -22,9 +22,9 @@ use bevy::{
   platform::collections::HashMap,
   prelude::AssetChanged,
   sprite::Sprite,
-  sprite_render::{Material2d, MeshMaterial2d, SpriteSystems},
+  sprite_render::{Material2d, MeshMaterial2d},
   time::Time,
-  ui::{UiSystems, widget::ImageNode},
+  ui::widget::ImageNode,
 };
 
 #[cfg(feature = "atlas_asset")]
@@ -74,7 +74,7 @@ impl AsAssetId for PixquareFile {
 ///
 /// ```no_run
 /// # use std::time::Duration;
-/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy::prelude::*;
 /// # use bevy_pixquare_ultra::prelude::{
 /// #   AnimationDirection,
 /// #   AnimationPlayState,
@@ -87,9 +87,7 @@ impl AsAssetId for PixquareFile {
 /// #   App::new()
 /// #     .add_plugins(
 /// #       DefaultPlugins
-/// #         .set(ImagePlugin {
-/// #           default_sampler: ImageSamplerDescriptor::nearest(),
-/// #         }),
+/// #         .set(ImagePlugin::default_nearest()),
 /// #     )
 /// #     .add_plugins(PixquareUltraPlugin)
 /// #     .add_systems(Startup, setup)
@@ -137,16 +135,14 @@ impl Default for PxFrameAnimation {
 /// When you specify a tag using this component and run the frame animation, the animation plays within the range of frames configured for that tag on the Pixquare side.
 ///
 /// ```no_run
-/// # use bevy::{image::ImageSamplerDescriptor, prelude::*};
+/// # use bevy::prelude::*;
 /// # use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation, PxTag};
 /// #
 /// # fn main() {
 /// #   App::new()
 /// #     .add_plugins(
 /// #       DefaultPlugins
-/// #         .set(ImagePlugin {
-/// #           default_sampler: ImageSamplerDescriptor::nearest(),
-/// #         }),
+/// #         .set(ImagePlugin::default_nearest()),
 /// #     )
 /// #     .add_plugins(PixquareUltraPlugin)
 /// #     .add_systems(Startup, setup)
@@ -530,10 +526,17 @@ impl<M: Material + RenderPx> RenderPx for MeshMaterial3d<M> {
   }
 }
 
-/// Ordered phases of Pixquare rendering in [`PostUpdate`].
+/// Runs Pixquare initialization, animation and image application between scene
+/// spawning and [`PostUpdate`].
 ///
-/// Read [`PxState`] and the applied image in systems ordered
-/// `.after(PxSystems::ApplyImage)`.
+/// Order systems within this schedule using [`PxSystems`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ScheduleLabel)]
+pub struct PxUpdate;
+
+/// Ordered phases of Pixquare rendering in [`PxUpdate`].
+///
+/// Read [`PxState`] and the applied image in [`PxUpdate`] systems ordered
+/// `.after(PxSystems::ApplyImage)` or in [`PostUpdate`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SystemSet)]
 pub enum PxSystems {
   /// Initialize assets and reconcile component changes.
@@ -559,7 +562,7 @@ impl PxRenderAppExt for App {
   where
     T: RenderPx + Component<Mutability = Mutable>,
   {
-    self.add_systems(PostUpdate, apply_image::<T>.in_set(PxSystems::ApplyImage))
+    self.add_systems(PxUpdate, apply_image::<T>.in_set(PxSystems::ApplyImage))
   }
 }
 
@@ -1206,9 +1209,15 @@ pub struct PixquareRendererPlugin;
 
 impl Plugin for PixquareRendererPlugin {
   fn build(&self, app: &mut App) {
+    app.init_schedule(PxUpdate);
+    app
+      .world_mut()
+      .resource_mut::<MainScheduleOrder>()
+      .insert_before(PostUpdate, PxUpdate);
+
     app
       .configure_sets(
-        PostUpdate,
+        PxUpdate,
         (
           PxSystems::Prepare,
           PxSystems::UpdateAnimation,
@@ -1218,7 +1227,7 @@ impl Plugin for PixquareRendererPlugin {
           .chain(),
       )
       .add_systems(
-        PostUpdate,
+        PxUpdate,
         (
           log_px_artwork_load_failures,
           (
@@ -1245,12 +1254,8 @@ impl Plugin for PixquareRendererPlugin {
             .in_set(PxSystems::Prepare),
           update_frame_index.in_set(PxSystems::UpdateAnimation),
           generate_image.in_set(PxSystems::GenerateImage),
-          apply_image::<Sprite>
-            .in_set(PxSystems::ApplyImage)
-            .before(SpriteSystems::ComputeSlices),
-          apply_image::<ImageNode>
-            .in_set(PxSystems::ApplyImage)
-            .before(UiSystems::Content),
+          apply_image::<Sprite>.in_set(PxSystems::ApplyImage),
+          apply_image::<ImageNode>.in_set(PxSystems::ApplyImage),
         ),
       )
       .add_observer(handle_advance_animation_frame_event)
@@ -1442,7 +1447,7 @@ mod tests {
     app
       .insert_resource(Assets::<PxArtwork>::default())
       .insert_resource(Assets::<Image>::default())
-      .add_systems(PostUpdate, (generate_image, apply_image::<Sprite>).chain());
+      .add_systems(PxUpdate, (generate_image, apply_image::<Sprite>).chain());
 
     let artwork_handle = add_px_artwork(&mut app, "assets/orange.px");
     let entity = app
@@ -1456,7 +1461,7 @@ mod tests {
       ))
       .id();
 
-    app.update();
+    app.world_mut().run_schedule(PxUpdate);
 
     assert_eq!(
       app.world().entity(entity).get::<Sprite>().unwrap().image,

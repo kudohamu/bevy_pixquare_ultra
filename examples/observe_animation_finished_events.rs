@@ -2,7 +2,7 @@
 //!
 //! command: cargo run --example observe_animation_finished_events
 
-use bevy::{image::ImageSamplerDescriptor, log::LogPlugin, prelude::*};
+use bevy::{log::LogPlugin, prelude::*};
 use bevy_pixquare_ultra::{
   event::{AnimationFinishedEvent, AnimationLoopFinishedEvent},
   prelude::{PixquareFile, PixquareUltraPlugin, PxFrameAnimation},
@@ -12,9 +12,7 @@ fn main() {
   App::new()
     .add_plugins(
       DefaultPlugins
-        .set(ImagePlugin {
-          default_sampler: ImageSamplerDescriptor::nearest(),
-        })
+        .set(ImagePlugin::default_nearest())
         .set(LogPlugin {
           filter: "wgpu=warn,bevy_ecs=info,bevy_pixquare_ultra=debug,observe_animation_finished_events=debug".into(),
           ..default()

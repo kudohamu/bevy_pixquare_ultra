@@ -3,9 +3,7 @@
 //!
 //! command: cargo run --example texture_atlas
 
-use bevy::{
-  image::ImageSamplerDescriptor, log::LogPlugin, platform::collections::HashMap, prelude::*,
-};
+use bevy::{log::LogPlugin, platform::collections::HashMap, prelude::*};
 use bevy_pixquare_ultra::prelude::{PixquareFile, PixquareUltraPlugin, PxAtlas, PxAtlasName};
 
 #[derive(Debug, Component)]
@@ -15,9 +13,7 @@ fn main() {
   App::new()
     .add_plugins(
       DefaultPlugins
-        .set(ImagePlugin {
-          default_sampler: ImageSamplerDescriptor::nearest(),
-        })
+        .set(ImagePlugin::default_nearest())
         .set(LogPlugin {
           filter: "wgpu=warn,bevy_ecs=info,bevy_pixquare_ultra=debug".into(),
           ..default()

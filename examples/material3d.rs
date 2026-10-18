@@ -4,7 +4,6 @@
 
 use bevy::{
   asset::ReflectAsset,
-  image::ImageSamplerDescriptor,
   log::LogPlugin,
   pbr::{Material, MaterialPlugin, MeshMaterial3d},
   prelude::*,
@@ -16,7 +15,7 @@ use bevy_pixquare_ultra::{
   renderer::{PxRenderAppExt, RenderPx},
 };
 
-const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wgsl";
+const SHADER_ASSET_PATH: &str = "shaders/pixquare_material_3d.wesl";
 
 #[derive(Component)]
 struct Cube;
@@ -25,9 +24,7 @@ fn main() {
   App::new()
     .add_plugins(
       DefaultPlugins
-        .set(ImagePlugin {
-          default_sampler: ImageSamplerDescriptor::nearest(),
-        })
+        .set(ImagePlugin::default_nearest())
         .set(LogPlugin {
           filter: "wgpu=warn,bevy_ecs=info,bevy_pixquare_ultra=debug".into(),
           ..default()
